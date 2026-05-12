@@ -215,20 +215,25 @@ async function generateMentionReply(history, userMessage) {
             throw new Error('모델 초기화 실패');
         }
 
-        const chat = model.startChat({
-            history: history,
+        const chatConfig = {
             generationConfig: {
                 maxOutputTokens: 500,
                 temperature: 0.8
             }
-        });
+        };
+
+        if (Array.isArray(history) && history.length > 0) {
+            chatConfig.history = history;
+        }
+
+        const chat = model.startChat(chatConfig);
 
         const enhancedMessage = `${userMessage}
 
-(너는 사용자의 친한 친구이자 유능한 AI 비서야. 
-설명은 친절하고 귀엽게 반말(해체)로 해줘. 
-전문적인 내용이라도 쉽고 재미있게 풀어서 설명해줘. 
-상황에 맞춰서 유연하게 500글자 이내로 대답해줘)`;
+        (너는 사용자의 친한 친구이자 유능한 AI 비서야. 
+        설명은 친절하고 귀엽게 반말(해체)로 해줘. 
+        전문적인 내용이라도 쉽고 재미있게 풀어서 설명해줘. 
+        상황에 맞춰서 유연하게 500글자 이내로 대답해줘)`;
 
         const result = await chat.sendMessage(enhancedMessage);
         
