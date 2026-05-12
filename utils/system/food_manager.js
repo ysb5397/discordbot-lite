@@ -55,21 +55,16 @@ function getCurrentMealInfo() {
     let type = 'lunch';
     let typeName = '🍴 점심';
 
-    // 💡 [수정됨] 네가 요청한 시간대를 빈틈(버그) 없이 연속적으로 연결했어!
     if (time < 840) {
-        // 00:00 ~ 08:39 -> 아침
         type = 'breakfast';
         typeName = '☀️ 아침';
     } else if (time < 1300) {
-        // 08:40 ~ 12:59 -> 점심 (9시나 10시에도 점심이 나오도록 연결)
         type = 'lunch';
         typeName = '🍴 점심';
     } else if (time < 1800) {
-        // 13:00 ~ 17:59 -> 저녁 (14시나 15시에도 저녁이 나오도록 연결)
         type = 'dinner';
         typeName = '🌙 저녁';
     } else {
-        // 18:00 이후 -> 다음 날 아침을 보여줌!
         targetDate.setDate(targetDate.getDate() + 1);
         type = 'breakfast';
         typeName = '☀️ 내일 아침';
@@ -83,13 +78,6 @@ function getCurrentMealInfo() {
     return { dateString, type, typeName };
 }
 
-function parseMealText(td) {
-    const $ = cheerio;
-    let text = $(td).find('span').text().trim();
-    text = text.replace(/\s*,\s*/g, ', ').replace(/\s+/g, ' ');
-    return text || "등록된 식단이 없습니다.";
-}
-
 async function crawlFoodData() {
     try {
         const url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
@@ -99,8 +87,13 @@ async function crawlFoodData() {
         const $ = cheerio.load(response.data);
 
         const newMenus = {};
+        const rows = $('table.tbl_table.menu tbody tr');
 
-        $('table.tbl_table.menu tbody tr').each((i, el) => {
+        if (rows.length === 0) {
+            throw new Error("테이블을 찾지 못했습니다. HTML 구조가 변경되었을 수 있습니다.");
+        }
+
+        rows.each((i, el) => {
             const tds = $(el).find('td');
             if (tds.length >= 4) {
                 const dateText = $(tds[0]).text().trim();
@@ -108,17 +101,22 @@ async function crawlFoodData() {
                 
                 if (dateMatch) {
                     const formattedDate = dateMatch[1];
+                    
+                    const breakfastRaw = $(tds[1]).text().trim().replace(/\s+/g, ' ');
+                    const lunchRaw = $(tds[2]).text().trim().replace(/\s+/g, ' ');
+                    const dinnerRaw = $(tds[3]).text().trim().replace(/\s+/g, ' ');
+
                     newMenus[formattedDate] = {
-                        breakfast: parseMealText(tds[1]),
-                        lunch: parseMealText(tds[2]),
-                        dinner: parseMealText(tds[3])
+                        breakfast: breakfastRaw || "등록된 식단이 없습니다.",
+                        lunch: lunchRaw || "등록된 식단이 없습니다.",
+                        dinner: dinnerRaw || "등록된 식단이 없습니다."
                     };
                 }
             }
         });
 
         if (Object.keys(newMenus).length === 0) {
-            throw new Error("식단표 데이터를 파싱하지 못했습니다. HTML 태그를 다시 확인하세요.");
+            throw new Error("식단표 데이터를 파싱하지 못했습니다. 날짜 형식을 확인하세요.");
         }
 
         return newMenus;
