@@ -215,19 +215,6 @@ async function generateMentionReply(history, userMessage) {
             throw new Error('모델 초기화 실패');
         }
 
-        const chatConfig = {
-            generationConfig: {
-                maxOutputTokens: 500,
-                temperature: 0.8
-            }
-        };
-
-        if (Array.isArray(history) && history.length > 0) {
-            chatConfig.history = history;
-        }
-
-        const chat = model.startChat(chatConfig);
-
         const enhancedMessage = `${userMessage}
 
         (너는 사용자의 친한 친구이자 유능한 AI 비서야. 
@@ -235,7 +222,15 @@ async function generateMentionReply(history, userMessage) {
         전문적인 내용이라도 쉽고 재미있게 풀어서 설명해줘. 
         상황에 맞춰서 유연하게 500글자 이내로 대답해줘)`;
 
-        const result = await chat.sendMessage(enhancedMessage);
+        // 💡 [핵심 수정됨] startChat() 대신 generateContent() 사용!
+        // 과거 대화 배열(history) 구조 때문에 SDK가 뻗는 문제를 원천 차단함.
+        const result = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: enhancedMessage }] }],
+            generationConfig: {
+                maxOutputTokens: 500,
+                temperature: 0.8
+            }
+        });
         
         if (!result.response || !result.response.text()) {
             throw new Error('빈 응답 받음');
@@ -247,11 +242,6 @@ async function generateMentionReply(history, userMessage) {
         throw new Error(`멘션 응답 생성 실패: ${error.message}`);
     }
 }
-
-
-
-
-
 
 module.exports = {
     getChatResponseStreamOrFallback,
