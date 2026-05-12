@@ -2,12 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const config = require('../../config/manage_environments.js');
 
 const FILE_PATH = path.join(__dirname, 'food_data.json');
+const OWNER_ID = config.discord.ownerId;
 
 const defaultData = {
-    lastManualSync: "", 
-    lastAutoSync: "",   
+    lastManualSync: "",      
+    lastAdminSyncTime: 0,    
+    lastAutoSync: "",        
     menus: {}           
 };
 
@@ -30,7 +33,6 @@ function saveData(data) {
     }
 }
 
-// 💡 [수정됨] 서버 설정과 상관없이 무조건 정확한 한국 시간(KST) 객체를 반환하는 함수
 function getKstDate() {
     return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
 }
@@ -43,35 +45,31 @@ function getTodayString() {
     return `${year}-${month}-${day}`;
 }
 
-/**
- * 현재 한국 시간을 기준으로 어떤 식사(조식/중식/석식)를 보여줄지 결정합니다.
- */
 function getCurrentMealInfo() {
     const kstDate = getKstDate();
     const hours = kstDate.getHours();
     const minutes = kstDate.getMinutes();
-    const time = hours * 100 + minutes; // 예: 08:30 -> 830
+    const time = hours * 100 + minutes;
 
     let targetDate = kstDate;
     let type = 'lunch';
     let typeName = '🍴 점심';
 
-    // 💡 [참고] 배식 시간표에 맞게 임계값을 조정했어!
-    // 아침: 08:00 ~ 08:40 / 점심: 12:00 ~ 13:10 / 저녁: 17:00 ~ 18:10
-    if (time < 850) {
-        // 08:50 이전 -> 아침
+    // 💡 [수정됨] 네가 요청한 시간대를 빈틈(버그) 없이 연속적으로 연결했어!
+    if (time < 840) {
+        // 00:00 ~ 08:39 -> 아침
         type = 'breakfast';
         typeName = '☀️ 아침';
-    } else if (time < 1320) {
-        // 08:50 ~ 13:20 -> 점심
+    } else if (time < 1300) {
+        // 08:40 ~ 12:59 -> 점심 (9시나 10시에도 점심이 나오도록 연결)
         type = 'lunch';
         typeName = '🍴 점심';
-    } else if (time < 1820) {
-        // 13:20 ~ 18:20 -> 저녁
+    } else if (time < 1800) {
+        // 13:00 ~ 17:59 -> 저녁 (14시나 15시에도 저녁이 나오도록 연결)
         type = 'dinner';
         typeName = '🌙 저녁';
     } else {
-        // 18:20 이후 -> 다음 날 아침
+        // 18:00 이후 -> 다음 날 아침을 보여줌!
         targetDate.setDate(targetDate.getDate() + 1);
         type = 'breakfast';
         typeName = '☀️ 내일 아침';
@@ -85,23 +83,13 @@ function getCurrentMealInfo() {
     return { dateString, type, typeName };
 }
 
-/**
- * 💡 [수정됨] HTML에서 메뉴 텍스트를 깔끔하게 추출합니다.
- */
 function parseMealText(td) {
     const $ = cheerio;
-    // 부산캠퍼스 식단표는 <span> 태그 안에 내용이 콤마(,)와 함께 들어있음
     let text = $(td).find('span').text().trim();
-    
-    // 예: "백미밥 , 콩나물국 , 고등어구이" -> "백미밥, 콩나물국, 고등어구이"로 보기 좋게 다듬기
     text = text.replace(/\s*,\s*/g, ', ').replace(/\s+/g, ' ');
-    
     return text || "등록된 식단이 없습니다.";
 }
 
-/**
- * 💡 [수정됨] 실제로 웹사이트에서 학식을 크롤링해오는 함수 (HTML 구조 완벽 대응)
- */
 async function crawlFoodData() {
     try {
         const url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
@@ -112,21 +100,14 @@ async function crawlFoodData() {
 
         const newMenus = {};
 
-        // 식단이 들어있는 정확한 테이블 지정: <table class="tbl_table menu">
         $('table.tbl_table.menu tbody tr').each((i, el) => {
             const tds = $(el).find('td');
-            
-            // 데이터가 있는 줄(<tr>)은 td가 4개 (구분, 조식, 중식, 석식) 임
             if (tds.length >= 4) {
                 const dateText = $(tds[0]).text().trim();
-                
-                // HTML 안의 "2026-05-11" 형태의 날짜 추출
                 const dateMatch = dateText.match(/(\d{4}-\d{2}-\d{2})/); 
                 
                 if (dateMatch) {
-                    const formattedDate = dateMatch[1]; // 예: "2026-05-11"
-
-                    // tds[1]: 조식, tds[2]: 중식, tds[3]: 석식
+                    const formattedDate = dateMatch[1];
                     newMenus[formattedDate] = {
                         breakfast: parseMealText(tds[1]),
                         lunch: parseMealText(tds[2]),
@@ -147,13 +128,24 @@ async function crawlFoodData() {
     }
 }
 
-async function syncFoodData(isManual = false) {
+async function syncFoodData(isManual = false, userId = null) {
     const data = readData();
     const today = getTodayString();
+    const now = Date.now();
 
     if (isManual) {
-        if (data.lastManualSync === today) {
-            return { success: false, message: "⚠️ 오늘은 이미 수동 동기화를 완료했습니다. 내일 다시 시도해주세요." };
+        const isAdmin = userId === OWNER_ID;
+
+        if (isAdmin) {
+            const COOLDOWN = 10 * 60 * 1000;
+            if (data.lastAdminSyncTime && (now - data.lastAdminSyncTime < COOLDOWN)) {
+                const remainingMinutes = Math.ceil((COOLDOWN - (now - data.lastAdminSyncTime)) / 60000);
+                return { success: false, message: `👑 관리자님, 아직 쿨타임입니다! ${remainingMinutes}분 후에 다시 시도해주세요.` };
+            }
+        } else {
+            if (data.lastManualSync === today) {
+                return { success: false, message: "⚠️ 오늘은 누군가 이미 수동 동기화를 완료했습니다. 내일 다시 시도해주세요. (관리자는 예외)" };
+            }
         }
     } else {
         if (data.lastAutoSync === today) {
@@ -165,7 +157,13 @@ async function syncFoodData(isManual = false) {
     data.menus = Object.assign(data.menus, crawledMenus); 
     
     if (isManual) {
-        data.lastManualSync = today;
+        const isAdmin = userId === OWNER_ID;
+        if (isAdmin) {
+            data.lastAdminSyncTime = now;
+            data.lastManualSync = today;
+        } else {
+            data.lastManualSync = today;
+        }
     } else {
         data.lastAutoSync = today;
     }
