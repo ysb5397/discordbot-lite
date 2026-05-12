@@ -7,7 +7,9 @@ const { getChatResponseStreamOrFallback } = require('../utils/ai/ai_helper.js');
 
 module.exports = {
     name: Events.MessageCreate,
-    async execute(message, client) {
+    async execute(message) {
+        const client = message.client;
+
         // 봇이 보낸 메시지는 무시
         if (message.author.bot) return;
 
