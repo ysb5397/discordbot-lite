@@ -1,11 +1,9 @@
-// events/interactionCreate.js
-
 const { Events } = require('discord.js');
 const { logToDiscord } = require('../utils/system/catch_log.js');
 const config = require('../config/manage_environments.js');
+const queueManager = require('../utils/system/queue_manager.js'); // 대기열 매니저 불러오기
 
 const ALLOWED_GUILD_ID = config.discord.guildId;
-const OWNER_ID = config.discord.ownerId;
 
 module.exports = {
     name: Events.InteractionCreate,
@@ -14,22 +12,13 @@ module.exports = {
             return;
         }
 
-        let foundUser = null;
-        try {
-            if (interaction.user.id !== OWNER_ID) {
-                foundUser = await WhiteList.findOne({ memberId: interaction.user.id });
-
-                // 길드 외부이거나 화이트리스트가 아닌 경우 차단
-                if (interaction.guildId !== ALLOWED_GUILD_ID && (!foundUser || !foundUser.isWhite)) {
-                    return interaction.reply({
-                        content: '이 봇은 승인된 서버 내부 또는 화이트 리스트 유저만 사용할 수 있습니다. 🔒',
-                        ephemeral: true
-                    }).catch(() => { });
-                }
-            }
-        } catch (dbErr) {
-            console.error('화이트리스트 조회 실패:', dbErr);
-            return interaction.reply({ content: '데이터베이스 오류로 권한을 확인할 수 없습니다.', ephemeral: true }).catch(() => { });
+        // 1. 대기열(슬롯) 검사
+        // 관리자가 아니면서 동시에 3명이 이미 봇을 쓰고 있다면 차단
+        if (!queueManager.canProcess(interaction.user.id)) {
+            return interaction.reply({
+                content: '⏳ 현재 봇이 대기열 마감(최대 3명) 상태입니다. 다른 작업이 끝난 후 잠시 뒤에 다시 시도해주세요!',
+                ephemeral: true
+            }).catch(() => { });
         }
 
         if (!interaction.isChatInputCommand()) return;
@@ -41,7 +30,11 @@ module.exports = {
             return;
         }
 
+        // 2. 대기열 입장 (슬롯 차지)
+        queueManager.enter(interaction.user.id);
+
         try {
+            // 3. 실제 명령어 실행
             await command.execute(interaction);
         } catch (error) {
             console.error(`Error executing ${interaction.commandName}`);
@@ -64,6 +57,9 @@ module.exports = {
             } catch (replyError) {
                 console.warn(`[Safety Catch] 유저에게 에러 알림 전송 실패 (무시됨): ${replyError.message}`);
             }
+        } finally {
+            // 4. 대기열 퇴장 (명령어가 성공하든 에러가 나든 무조건 슬롯을 반환해야 함)
+            queueManager.leave(interaction.user.id);
         }
     },
 };
