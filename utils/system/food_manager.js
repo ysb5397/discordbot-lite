@@ -78,6 +78,12 @@ function getCurrentMealInfo() {
     return { dateString, type, typeName };
 }
 
+// 💡 [새로 추가됨] AI에게 넘겨주기 위해 일주일치 메뉴를 통째로 반환하는 함수!
+function getAllMenus() {
+    const data = readData();
+    return data.menus;
+}
+
 async function crawlFoodData() {
     try {
         const url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
@@ -179,4 +185,5 @@ function getMenu(dateString, type) {
     return todayData[type] || "해당 식사 정보가 없습니다.";
 }
 
-module.exports = { syncFoodData, getMenu, getTodayString, getCurrentMealInfo };
+// 💡 [수정됨] 모듈 내보내기에 getAllMenus 추가!
+module.exports = { syncFoodData, getMenu, getTodayString, getCurrentMealInfo, getAllMenus };
