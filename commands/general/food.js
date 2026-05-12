@@ -13,11 +13,10 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('refresh')
-                .setDescription('학식 데이터를 최신 상태로 동기화합니다. (하루 1회 제한)')
+                .setDescription('학식 데이터를 최신 상태로 동기화합니다. (일반 유저 1일 1회, 관리자 10분 1회)')
         ),
 
     async execute(interaction) {
-        // 크롤링 등 시간이 걸릴 수 있으므로 deferReply 먼저 호출
         await interaction.deferReply();
 
         const subcommand = interaction.options.getSubcommand(false) || 'now';
@@ -25,7 +24,8 @@ module.exports = {
         // 1. 동기화 명령어 처리 (/food refresh)
         if (subcommand === 'refresh') {
             try {
-                const result = await syncFoodData(true); // true = 수동 동기화 모드
+                // 💡 [수정됨] 상호작용을 발생시킨 유저의 ID를 매개변수로 넘겨줍니다.
+                const result = await syncFoodData(true, interaction.user.id);
                 return interaction.followUp(result.message);
             } catch (err) {
                 return interaction.followUp("❌ 크롤링 중 오류가 발생했습니다. 나중에 다시 시도해주세요.");
@@ -33,14 +33,12 @@ module.exports = {
         }
 
         // 2. 식단 조회 로직 (/food now 또는 그냥 /food)
-        // 현재 시간에 맞춰서 조식, 중식, 석식 중 무엇을 보여줄지 결정
         const { dateString, type, typeName } = getCurrentMealInfo();
         
-        // 데이터에서 해당 식단 가져오기
         const menuString = getMenu(dateString, type);
 
         const embed = new EmbedBuilder()
-            .setColor(0x2ECC71) // 먹음직스러운 초록/연두색 계열
+            .setColor(0x2ECC71) 
             .setTitle(`🍽️ 오늘의 학식 (${typeName})`)
             .setDescription(`**[${dateString}]**\n\n${menuString}`)
             .setFooter({ text: '데이터 동기화가 필요하면 /food refresh를 사용하세요.' });
