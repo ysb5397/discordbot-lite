@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { getTodayString } = require('../utils/system/food_manager.js');
 
-const { getChatResponseStreamOrFallback } = require('../utils/ai/ai_helper.js'); 
+const { generateMentionReply } = require('../utils/ai/ai_helper.js'); 
 
 module.exports = {
     name: Events.MessageCreate,
@@ -69,7 +69,7 @@ module.exports = {
                     ${userQuery}
                 `;
 
-                const reply = await getChatResponseStreamOrFallback(systemPrompt);
+                const reply = await generateMentionReply(systemPrompt);
                 
                 await message.reply(reply);
                 return;
