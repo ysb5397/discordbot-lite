@@ -29,63 +29,56 @@ module.exports = {
         const isFoodQuery = foodKeywords.some(keyword => userQuery.includes(keyword));
 
         // --- 🍔 학식 관련 질문일 때 (AI + 로컬 파일 RAG) ---
-        if (isFoodQuery) {
-            try {
-                await message.channel.sendTyping(); // "봇이 입력 중..." 상태 표시
+        try {
+            await message.channel.sendTyping(); // "봇이 입력 중..." 상태 표시
 
-                // 1) 캐싱된 food_data.json 읽어오기
-                const filePath = path.join(__dirname, '../utils/system/food_data.json');
-                let foodDataStr = "아직 크롤링된 데이터가 없어! /food refresh를 먼저 해줘.";
+            // 1) 캐싱된 food_data.json 읽어오기
+            const filePath = path.join(__dirname, '../utils/system/food_data.json');
+            let foodDataStr = "아직 크롤링된 데이터가 없어! /food refresh를 먼저 해줘.";
+            
+            if (fs.existsSync(filePath)) {
+                const rawData = fs.readFileSync(filePath, 'utf8');
+                const parsed = JSON.parse(rawData);
                 
-                if (fs.existsSync(filePath)) {
-                    const rawData = fs.readFileSync(filePath, 'utf8');
-                    const parsed = JSON.parse(rawData);
-                    
-                    // AI가 쉽게 읽도록 날짜-메뉴 객체만 예쁘게 문자열로 변환해서 넘김
-                    foodDataStr = JSON.stringify(parsed.menus, null, 2);
-                }
-
-                const today = getTodayString();
-
-                // 2) AI에게 부여할 강력한 프롬프트 셋팅!
-                const systemPrompt = `
-                    [System]
-                    너는 폴리텍 부산캠퍼스의 귀엽고 친절한 '학식 알리미 챗봇'이야. 사용자에게 다정하고 편한 반말로 대답해줘.
-                    오늘 날짜는 ${today}야.
-                    아래 제공된 [이번 주 학식 데이터]를 꼼꼼히 읽고, 사용자의 질문에 정확하고 센스 있게 답변해줘.
-
-                    ${isFoodQuery} 이 값이 동적으로 Boolean 값으로 들어올거야.
-                    만약 해당 값과 질문 모두 학식 질문과 관련이 없다면 일반 답변 모드로 응해줘. 
-
-                    [답변 규칙]
-                    1. 데이터에 없는 날짜(다음 주 등)를 물어보면 "아직 그 날짜의 식단은 안 나왔어 ㅠㅠ"라고 안내해.
-                    2. 특정 메뉴(예: 면요리, 고기)를 물어보면, 데이터 안에서 해당 메뉴가 있는 날짜와 식사(조/중/석식)를 찾아서 알려줘.
-                    3. 데이터가 비어있거나 "등록된 식단이 없습니다."라고 되어있으면 식사가 없는 걸로(예: 주말) 처리해.
-                    4. 요약해서 핵심만 말하되, 먹음직스러운 이모티콘을 적극적으로 사용해줘!
-                    5. 아래 사용자의 질문 내용과 무관한 말은 지어내지 마.
-                    6. 지금 넘겨주는 학식 데이터는 모두 실시간으로 가져온 데이터니까 신뢰도는 걱정하지 않아도 돼.
-
-                    [이번 주 학식 데이터]
-                    ${foodDataStr}
-
-                    [사용자 질문]
-                    ${userQuery}
-                `;
-
-                const reply = await generateMentionReply(systemPrompt);
-                
-                await message.reply(reply);
-                return;
-
-            } catch (error) {
-                console.error('학식 AI 응답 처리 중 에러:', error);
-                return message.reply('앗! 학식 정보를 AI로 처리하다가 에러가 났어! (콘솔 확인해봐!)');
+                // AI가 쉽게 읽도록 날짜-메뉴 객체만 예쁘게 문자열로 변환해서 넘김
+                foodDataStr = JSON.stringify(parsed.menus, null, 2);
             }
-        } 
-        
-        // --- 💬 학식 외의 일반 멘션 대화일 때 ---
-        else {
-            return message.reply('나한테 학식을 물어보고 싶다면 "내일 점심 뭐야?", "오늘 면요리 나와?" 처럼 물어봐줘! 🍱\n(명령어로 확인하려면 `/food`를 쳐줘!)');
+
+            const today = getTodayString();
+
+            // 2) AI에게 부여할 강력한 프롬프트 셋팅!
+            const systemPrompt = `
+                [System]
+                너는 폴리텍 부산캠퍼스의 귀엽고 친절한 '학식 알리미 챗봇'이야. 사용자에게 다정하고 편한 반말로 대답해줘.
+                오늘 날짜는 ${today}야.
+                아래 제공된 [이번 주 학식 데이터]를 꼼꼼히 읽고, 사용자의 질문에 정확하고 센스 있게 답변해줘.
+
+                ${isFoodQuery} 이 값이 동적으로 Boolean 값으로 들어올거야.
+                만약 해당 값과 질문 모두 학식 질문과 관련이 없다면 일반 답변 모드로 응답해줘. 
+
+                [답변 규칙]
+                1. 데이터에 없는 날짜(다음 주 등)를 물어보면 "아직 그 날짜의 식단은 안 나왔어 ㅠㅠ"라고 안내해.
+                2. 특정 메뉴(예: 면요리, 고기)를 물어보면, 데이터 안에서 해당 메뉴가 있는 날짜와 식사(조/중/석식)를 찾아서 알려줘.
+                3. 데이터가 비어있거나 "등록된 식단이 없습니다."라고 되어있으면 식사가 없는 걸로(예: 주말) 처리해.
+                4. 요약해서 핵심만 말하되, 먹음직스러운 이모티콘을 적극적으로 사용해줘!
+                5. 아래 사용자의 질문 내용과 무관한 말은 지어내지 마.
+                6. 지금 넘겨주는 학식 데이터는 모두 실시간으로 가져온 데이터니까 신뢰도는 걱정하지 않아도 돼.
+
+                [이번 주 학식 데이터]
+                ${foodDataStr}
+
+                [사용자 질문]
+                ${userQuery}
+            `;
+
+            const reply = await generateMentionReply(systemPrompt);
+            
+            await message.reply(reply);
+            return;
+
+        } catch (error) {
+            console.error('학식 AI 응답 처리 중 에러:', error);
+            return message.reply('앗! 학식 정보를 AI로 처리하다가 에러가 났어! (콘솔 확인해봐!)');
         }
     },
 };
