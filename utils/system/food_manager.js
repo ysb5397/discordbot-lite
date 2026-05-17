@@ -45,6 +45,21 @@ function getTodayString() {
     return `${year}-${month}-${day}`;
 }
 
+function getNextWeekDateString() {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0(일) ~ 6(토)
+    
+    // 오늘 요일을 기준으로 다음 주 월요일까지 며칠 남았는지 계산
+    const daysUntilNextMonday = (dayOfWeek === 0 ? 1 : 8 - dayOfWeek);
+    today.setDate(today.getDate() + daysUntilNextMonday);
+
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+
+    return `${year}${month}${day}`; // 예: '20260525'
+}
+
 function getCurrentMealInfo() {
     const kstDate = getKstDate();
     const hours = kstDate.getHours();
@@ -84,12 +99,20 @@ function getAllMenus() {
     return data.menus;
 }
 
-async function crawlFoodData() {
+async function crawlFoodData(targetDate = null) {
     try {
         const url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
+
+        if (targetDate) {
+            url += `&day=${targetDate}`; 
+        }
+
+        console.log(`[학식 크롤링] 데이터 가져오는 중... URL: ${url}`);
+
         const response = await axios.get(url, {
             headers: { 'User-Agent': 'Mozilla/5.0' }
         });
+        
         const $ = cheerio.load(response.data);
 
         const newMenus = {};
@@ -132,16 +155,16 @@ async function crawlFoodData() {
     }
 }
 
-async function syncFoodData(isManual = false, userId = null) {
+async function syncFoodData(isManual = false, userId = null, targetDate = null) {
     const data = readData();
     const today = getTodayString();
     const now = Date.now();
+    const COOLDOWN = 10 * 60 * 1000;
 
     if (isManual) {
         const isAdmin = userId === OWNER_ID;
 
         if (isAdmin) {
-            const COOLDOWN = 10 * 60 * 1000;
             if (data.lastAdminSyncTime && (now - data.lastAdminSyncTime < COOLDOWN)) {
                 const remainingMinutes = Math.ceil((COOLDOWN - (now - data.lastAdminSyncTime)) / 60000);
                 return { success: false, message: `👑 관리자님, 아직 쿨타임입니다! ${remainingMinutes}분 후에 다시 시도해주세요.` };
@@ -185,5 +208,4 @@ function getMenu(dateString, type) {
     return todayData[type] || "해당 식사 정보가 없습니다.";
 }
 
-// 💡 [수정됨] 모듈 내보내기에 getAllMenus 추가!
-module.exports = { syncFoodData, getMenu, getTodayString, getCurrentMealInfo, getAllMenus };
+module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus };
