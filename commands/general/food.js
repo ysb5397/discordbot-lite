@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { syncFoodData, getMenu, getCurrentMealInfo } = require('../../utils/system/food_manager.js');
+const { getMenu, syncFoodData, getTodayString, getKstDate, getNextWeekDateString } = require('../../utils/system/food_manager.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
