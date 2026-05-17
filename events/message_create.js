@@ -49,7 +49,7 @@ module.exports = {
             // 2) AI에게 부여할 강력한 프롬프트 셋팅!
             const systemPrompt = `
                 [System]
-                너는 폴리텍 부산캠퍼스의 귀엽고 친절한 '학식 알리미 챗봇'이야. 사용자에게 다정하고 편한 반말로 대답해줘.
+                너는 폴리텍 부산캠퍼스의 귀엽고 친절한 '학식 알리미 챗봇'이야. 사용자에게 다정하고 편하게 대답해줘.
                 오늘 날짜는 ${today}야.
                 아래 제공된 [이번 주 학식 데이터]를 꼼꼼히 읽고, 사용자의 질문에 정확하고 센스 있게 답변해줘.
 
@@ -71,7 +71,7 @@ module.exports = {
                 ${userQuery}
             `;
 
-            const reply = await generateMentionReply(systemPrompt);
+            const reply = await generateMentionReply(null, systemPrompt);
             
             await message.reply(reply);
             return;

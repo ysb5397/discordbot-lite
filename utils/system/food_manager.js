@@ -62,27 +62,45 @@ function getNextWeekDateString() {
 
 function getCurrentMealInfo() {
     const kstDate = getKstDate();
+    const dayOfWeek = kstDate.getDay(); // 0:일, 1:월, ... 5:금, 6:토
     const hours = kstDate.getHours();
     const minutes = kstDate.getMinutes();
     const time = hours * 100 + minutes;
 
-    let targetDate = kstDate;
-    let type = 'lunch';
-    let typeName = '🍴 점심';
+    let targetDate = new Date(kstDate); // 원본 객체 변형 방지를 위해 복사
+    let type = '';
+    let typeName = '';
+    let isNextWeek = false;
 
-    if (time < 840) {
+    // [주말 판별] 금요일 18시 이후, 토요일, 일요일
+    if ((dayOfWeek === 5 && time >= 1800) || dayOfWeek === 6 || dayOfWeek === 0) {
+        let daysToAdd = 1;
+        if (dayOfWeek === 5) daysToAdd = 3;      // 금요일이면 +3일 (월요일)
+        else if (dayOfWeek === 6) daysToAdd = 2; // 토요일이면 +2일 (월요일)
+        else if (dayOfWeek === 0) daysToAdd = 1; // 일요일이면 +1일 (월요일)
+
+        targetDate.setDate(targetDate.getDate() + daysToAdd);
         type = 'breakfast';
-        typeName = '☀️ 아침';
-    } else if (time < 1300) {
-        type = 'lunch';
-        typeName = '🍴 점심';
-    } else if (time < 1800) {
-        type = 'dinner';
-        typeName = '🌙 저녁';
-    } else {
-        targetDate.setDate(targetDate.getDate() + 1);
-        type = 'breakfast';
-        typeName = '☀️ 내일 아침';
+        typeName = '☀️ 다음주 월요일 아침';
+        isNextWeek = true;
+    } 
+    // [평일 판별] 월~목, 금요일 18시 이전
+    else {
+        if (time < 840) {
+            type = 'breakfast';
+            typeName = '☀️ 아침';
+        } else if (time < 1300) {
+            type = 'lunch';
+            typeName = '🍴 점심';
+        } else if (time < 1800) {
+            type = 'dinner';
+            typeName = '🌙 저녁';
+        } else {
+            // 월~목 18시 이후 -> 다음날 아침 (금요일 18시 이후는 위 주말 판별에서 걸러짐)
+            targetDate.setDate(targetDate.getDate() + 1);
+            type = 'breakfast';
+            typeName = '☀️ 내일 아침';
+        }
     }
 
     const year = targetDate.getFullYear();
@@ -90,10 +108,9 @@ function getCurrentMealInfo() {
     const day = String(targetDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
     
-    return { dateString, type, typeName };
+    return { dateString, type, typeName, isNextWeek };
 }
 
-// 💡 [새로 추가됨] AI에게 넘겨주기 위해 일주일치 메뉴를 통째로 반환하는 함수!
 function getAllMenus() {
     const data = readData();
     return data.menus;
@@ -101,7 +118,7 @@ function getAllMenus() {
 
 async function crawlFoodData(targetDate = null) {
     try {
-        const url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
+        let url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
 
         if (targetDate) {
             url += `&day=${targetDate}`; 
@@ -180,7 +197,7 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
         }
     }
 
-    const crawledMenus = await crawlFoodData();
+    const crawledMenus = await crawlFoodData(targetDate);
     data.menus = Object.assign(data.menus, crawledMenus); 
     
     if (isManual) {

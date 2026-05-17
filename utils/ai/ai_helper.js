@@ -209,7 +209,7 @@ async function* getChatResponseStreamOrFallback(
  */
 async function generateMentionReply(history, userMessage) {
     try {
-        const model = models['gemini-2.5-flash'];
+        const model = models['gemini-3-flash-preview'];
         
         if (!model) {
             throw new Error('모델 초기화 실패');
@@ -217,18 +217,17 @@ async function generateMentionReply(history, userMessage) {
 
         const enhancedMessage = `${userMessage}
 
-        (너는 사용자의 친한 친구이자 유능한 AI 비서야. 
-        설명은 친절하고 귀엽게 반말(해체)로 해줘. 
+        (너는 사용자의 유능한 AI 비서야. 
+        설명은 친절하게 해줘. 
         전문적인 내용이라도 쉽고 재미있게 풀어서 설명해줘. 
-        상황에 맞춰서 유연하게 500글자 이내로 대답해줘)`;
+        상황에 맞춰서 유연하게 대답해줘)`;
 
         // 💡 [핵심 수정됨] startChat() 대신 generateContent() 사용!
         // 과거 대화 배열(history) 구조 때문에 SDK가 뻗는 문제를 원천 차단함.
         const result = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: enhancedMessage }] }],
             generationConfig: {
-                maxOutputTokens: 500,
-                temperature: 0.8
+                temperature: 0.1
             }
         });
         
