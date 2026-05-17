@@ -208,4 +208,4 @@ function getMenu(dateString, type) {
     return todayData[type] || "해당 식사 정보가 없습니다.";
 }
 
-module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus };
+module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus, getKstDate };
