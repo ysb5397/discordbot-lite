@@ -120,6 +120,10 @@ async function crawlFoodData(targetDate = null) {
     try {
         let url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
 
+        if (targetDate == null) {
+            targetDate = getNextWeekDateString()
+        }
+
         if (targetDate) {
             url += `&day=${targetDate}`; 
         }
