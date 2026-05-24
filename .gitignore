@@ -146,4 +146,8 @@ package-lock.json
 # env
 .env
 
+# last_eq.txt & food_data.json
+utils/system/last_eq.txt
+utils/system/food_data.json
+
 # End of https://www.toptal.com/developers/gitignore/api/node

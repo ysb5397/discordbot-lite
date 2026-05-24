@@ -14,14 +14,22 @@ module.exports = {
             subcommand
                 .setName('refresh')
                 .setDescription('학식 데이터를 최신 상태로 동기화합니다. (일반 유저 1일 1회, 관리자 10분 1회)')
+                .addIntegerOption(option =>
+                    option.setName('day')
+                        .setDescription('동기화할 날짜를 선택하세요. 예시 - yyyyMMdd (선택하지 않으면 오늘 날짜로 동기화)')
+                        .setRequired(false)
+                )
         ),
 
     async execute(interaction) {
         await interaction.deferReply();
 
         const subcommand = interaction.options.getSubcommand(false) || 'now';
+        const dayOption = interaction.options.getInteger('day');
 
         const { dateString, type, typeName, isNextWeek } = getCurrentMealInfo();
+
+        const targetDateStr = dayOption ? dayOption.toString() : getNextWeekDateString();
 
         // 1. 동기화 명령어 처리 (/food refresh)
         if (subcommand === 'refresh') {
@@ -29,6 +37,7 @@ module.exports = {
                 const result = await syncFoodData(true, interaction.user.id, isNextWeek ? targetDateStr : null);
                 return interaction.followUp(result.message);
             } catch (err) {
+                console.error('❌ [Food Command] 동기화 중 에러:', err);
                 return interaction.followUp("❌ 크롤링 중 오류가 발생했습니다. 나중에 다시 시도해주세요.");
             }
         }
