@@ -4,6 +4,7 @@ const path = require('path');
 const { getTodayString } = require('../utils/system/food_manager.js');
 
 const { generateMentionReply } = require('../utils/ai/ai_helper.js'); 
+const { getMemberFoodPreference } = require('../utils/system/member_food_reference_manager.js'); 
 
 module.exports = {
     name: Events.MessageCreate,
@@ -46,6 +47,32 @@ module.exports = {
 
             const today = getTodayString();
 
+            // 1.5) 질문한 유저의 선호도 정보 가져오기
+            const userId = message.author.id;
+            const displayName = message.member?.displayName || message.author.displayName;
+            const preference = getMemberFoodPreference(userId);
+            
+            let preferencePrompt = "";
+            if (preference && (preference.favorite.length > 0 || preference.dislike.length > 0)) {
+                const favStr = preference.favorite.length > 0 ? preference.favorite.join(', ') : '없음';
+                const disStr = preference.dislike.length > 0 ? preference.dislike.join(', ') : '없음';
+                preferencePrompt = `
+                [질문한 사용자 선호 정보]
+                - 이름: ${displayName}
+                - 좋아하는 음식: ${favStr}
+                - 싫어하는 음식: ${disStr}
+
+                [추가 답변 지시사항]
+                질문한 사용자의 식단 선호 정보를 기반으로, 학식 데이터에 사용자가 좋아하는 음식이 포함되어 있다면 적극적으로 반기며 추천(예: "OO님이 좋아하는 제육볶음이 나오네! 😍")해주고, 싫어하는 음식이 포함되어 있다면 다정하게 경고나 주의를 곁들여줘 (예: "다만 OO님이 싫어하는 버섯도 들어가 있으니 조심해! 🥺").
+                `;
+            } else {
+                preferencePrompt = `
+                [질문한 사용자 선호 정보]
+                - 이름: ${displayName}
+                - 식단 선호 정보가 설정되어 있지 않습니다.
+                `;
+            }
+
             // 2) AI에게 부여할 강력한 프롬프트 셋팅!
             const systemPrompt = `
                 [System]
@@ -63,6 +90,8 @@ module.exports = {
                 4. 요약해서 핵심만 말하되, 먹음직스러운 이모티콘을 적극적으로 사용해줘!
                 5. 아래 사용자의 질문 내용과 무관한 말은 지어내지 마.
                 6. 지금 넘겨주는 학식 데이터는 모두 실시간으로 가져온 데이터니까 신뢰도는 걱정하지 않아도 돼.
+
+                ${preferencePrompt}
 
                 [이번 주 학식 데이터]
                 ${foodDataStr}

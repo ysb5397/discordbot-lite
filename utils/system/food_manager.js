@@ -121,7 +121,11 @@ async function crawlFoodData(targetDate = null) {
         let url = 'https://www.kopo.ac.kr/busan/content.do?menu=5609';
 
         if (targetDate == null) {
-            targetDate = getNextWeekDateString()
+            const today = getKstDate();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            targetDate = `${year}${month}${day}`;
         }
 
         if (targetDate) {
@@ -202,7 +206,7 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
     }
 
     const crawledMenus = await crawlFoodData(targetDate);
-    data.menus = Object.assign(data.menus, crawledMenus); 
+    data.menus = crawledMenus; 
     
     if (isManual) {
         const isAdmin = userId === OWNER_ID;
