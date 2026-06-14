@@ -400,10 +400,10 @@ async function generateFoodImage(dateString, typeName, menuString) {
       </defs>
       <rect width="600" height="400" rx="32" ry="32" fill="url(#pastelGrad)"/>
       <rect x="25" y="25" width="550" height="350" rx="22" ry="22" fill="#ffffff" fill-opacity="0.6"/>
-      <text x="55" y="80" font-family="sans-serif" font-size="24" font-weight="bold" fill="#3B3A5F">🍽️ 학식 안내 (${typeName})</text>
-      <text x="545" y="75" font-family="sans-serif" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
+      <text x="55" y="80" font-family="'NanumGothic', sans-serif" font-size="24" font-weight="bold" fill="#3B3A5F">🍽️ 학식 안내 (${typeName})</text>
+      <text x="545" y="75" font-family="'NanumGothic', sans-serif" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
       <line x1="50" y1="105" x2="550" y2="105" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
-      <text x="80" y="${startY}" font-family="sans-serif" font-size="18" font-weight="bold" fill="#3B3A5F">
+      <text x="80" y="${startY}" font-family="'NanumGothic', sans-serif" font-size="18" font-weight="bold" fill="#3B3A5F">
         ${tspanElements}
       </text>
     </svg>
