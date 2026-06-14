@@ -6,7 +6,7 @@ const sharp = require('sharp');
 const config = require('../../config/manage_environments.js');
 
 const FILE_PATH = path.join(__dirname, 'food_data.json');
-const DAYS_FILE_PATH = path.join(__dirname, '_days.json');
+const DAYS_FILE_PATH = path.join(__dirname, 'exception_days.json');
 const OWNER_IDS = config.discord.ownerId.split(',').map(id => id.trim()); // 여러 관리자 ID를 배열로 저장
 
 const defaultData = {
@@ -38,7 +38,7 @@ function getSpecialDayReason(dateString) {
             }
         }
     } catch (e) {
-        console.error('❌ [FoodManager] _days.json 읽기 실패:', e);
+        console.error('❌ [FoodManager] exception_days.json 읽기 실패:', e);
     }
     return null;
 }
@@ -82,7 +82,6 @@ function getNextWeekDateString() {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0(일) ~ 6(토)
     
-    // 오늘 요일을 기준으로 다음 주 월요일까지 며칠 남았는지 계산
     const daysUntilNextMonday = (dayOfWeek === 0 ? 1 : 8 - dayOfWeek);
     today.setDate(today.getDate() + daysUntilNextMonday);
 
@@ -100,7 +99,6 @@ function getMondayOfDate(dateStr) {
     const d = new Date(formatted);
     const day = d.getDay(); // 0:일, 1:월, ... 6:토
     
-    // 일요일(0)이면 -6일, 월요일(1)이면 0일, 화요일(2)이면 -1일...
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     const monday = new Date(d.setDate(diff));
     
@@ -259,7 +257,6 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
     const COOLDOWN = 10 * 60 * 1000;
 
     if (isManual) {
-
         const isAdmin = OWNER_IDS.includes(userId);
 
         if (isAdmin) {
@@ -316,7 +313,7 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
     while (data.menus.length > 3) {
         data.menus.shift();
     } 
-    
+
     if (isManual) {
         const isAdmin = OWNER_IDS.includes(userId);
         
@@ -400,16 +397,13 @@ async function generateFoodImage(dateString, typeName, menuString) {
           <stop offset="0%" style="stop-color:#B3CFFB;stop-opacity:1" />
           <stop offset="100%" style="stop-color:#E3CAFD;stop-opacity:1" />
         </linearGradient>
-        <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-          <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.1"/>
-        </filter>
       </defs>
       <rect width="600" height="400" rx="32" ry="32" fill="url(#pastelGrad)"/>
       <rect x="25" y="25" width="550" height="350" rx="22" ry="22" fill="#ffffff" fill-opacity="0.6"/>
-      <text x="55" y="80" font-family="'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="24" font-weight="bold" fill="#3B3A5F" filter="url(#shadow)">🍽️ 학식 안내 (${typeName})</text>
-      <text x="545" y="75" font-family="'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
+      <text x="55" y="80" font-family="sans-serif" font-size="24" font-weight="bold" fill="#3B3A5F">🍽️ 학식 안내 (${typeName})</text>
+      <text x="545" y="75" font-family="sans-serif" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
       <line x1="50" y1="105" x2="550" y2="105" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
-      <text x="80" y="${startY}" font-family="'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="18" font-weight="bold" fill="#3B3A5F">
+      <text x="80" y="${startY}" font-family="sans-serif" font-size="18" font-weight="bold" fill="#3B3A5F">
         ${tspanElements}
       </text>
     </svg>
@@ -418,4 +412,69 @@ async function generateFoodImage(dateString, typeName, menuString) {
     return await sharp(Buffer.from(svg)).png().toBuffer();
 }
 
-module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus, getKstDate, getSpecialDayReason, getMondayOfDate, generateFoodImage };
+function isAdminUser(userId) {
+    return OWNER_IDS.includes(userId);
+}
+
+function addSpecialDay(dateStr, reason) {
+    const formatted = formatToHyphenDate(dateStr);
+    if (!formatted || !/^\d{4}-\d{2}-\d{2}$/.test(formatted)) {
+        return { success: false, message: "❌ 올바르지 않은 날짜 형식이야! YYYYMMDD 또는 YYYY-MM-DD 형식으로 입력해줘." };
+    }
+    try {
+        let daysData = {};
+        if (fs.existsSync(DAYS_FILE_PATH)) {
+            const content = fs.readFileSync(DAYS_FILE_PATH, 'utf8').trim();
+            if (content) {
+                daysData = JSON.parse(content);
+            }
+        }
+        daysData[formatted] = reason;
+        fs.writeFileSync(DAYS_FILE_PATH, JSON.stringify(daysData, null, 2), 'utf8');
+        return { success: true, message: `✅ **${formatted}** 날짜가 **'${reason}'**(으)로 등록되었어!` };
+    } catch (e) {
+        console.error('❌ [FoodManager] addSpecialDay 실패:', e);
+        return { success: false, message: "❌ 예외 날짜를 저장하는 도중 에러가 발생했어." };
+    }
+}
+
+function removeSpecialDay(dateStr) {
+    const formatted = formatToHyphenDate(dateStr);
+    if (!formatted || !/^\d{4}-\d{2}-\d{2}$/.test(formatted)) {
+        return { success: false, message: "❌ 올바르지 않은 날짜 형식이야! YYYYMMDD 또는 YYYY-MM-DD 형식으로 입력해줘." };
+    }
+    try {
+        let daysData = {};
+        if (fs.existsSync(DAYS_FILE_PATH)) {
+            const content = fs.readFileSync(DAYS_FILE_PATH, 'utf8').trim();
+            if (content) {
+                daysData = JSON.parse(content);
+            }
+        }
+        if (!daysData[formatted]) {
+            return { success: false, message: `⚠️ **${formatted}** 날짜는 등록된 예외 날짜가 아니야!` };
+        }
+        delete daysData[formatted];
+        fs.writeFileSync(DAYS_FILE_PATH, JSON.stringify(daysData, null, 2), 'utf8');
+        return { success: true, message: `✅ **${formatted}** 예외 날짜가 성공적으로 삭제되었어!` };
+    } catch (e) {
+        console.error('❌ [FoodManager] removeSpecialDay 실패:', e);
+        return { success: false, message: "❌ 예외 날짜를 삭제하는 도중 에러가 발생했어." };
+    }
+}
+
+function getSpecialDaysList() {
+    try {
+        if (fs.existsSync(DAYS_FILE_PATH)) {
+            const content = fs.readFileSync(DAYS_FILE_PATH, 'utf8').trim();
+            if (content) {
+                return JSON.parse(content);
+            }
+        }
+    } catch (e) {
+        console.error('❌ [FoodManager] getSpecialDaysList 실패:', e);
+    }
+    return {};
+}
+
+module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus, getKstDate, getSpecialDayReason, getMondayOfDate, generateFoodImage, isAdminUser, addSpecialDay, removeSpecialDay, getSpecialDaysList };

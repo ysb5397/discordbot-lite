@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const { getMenu, syncFoodData, getTodayString, getKstDate, getNextWeekDateString, getCurrentMealInfo, getSpecialDayReason, getMondayOfDate, generateFoodImage } = require('../../utils/system/food_manager.js');
+const { getMenu, syncFoodData, getTodayString, getKstDate, getNextWeekDateString, getCurrentMealInfo, getSpecialDayReason, getMondayOfDate, generateFoodImage, isAdminUser, addSpecialDay, removeSpecialDay, getSpecialDaysList } = require('../../utils/system/food_manager.js');
 const { saveMemberFoodPreference, getMemberFoodPreference } = require('../../utils/system/member_food_reference_manager.js');
 
 module.exports = {
@@ -35,11 +35,47 @@ module.exports = {
                         .setDescription('선호도 초기화 여부 (true로 설정하면 좋아하는 음식과 싫어하는 음식 모두 초기화)')
                         .setRequired(false)
                 )
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('exception')
+                .setDescription('학식 예외 날짜(휴강, 공휴일)를 관리합니다. (관리자 전용)')
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('add')
+                        .setDescription('예외 날짜를 추가합니다.')
+                        .addStringOption(option =>
+                            option.setName('day')
+                                .setDescription('예외 날짜 (형식: YYYYMMDD 또는 YYYY-MM-DD)')
+                                .setRequired(true)
+                        )
+                        .addStringOption(option =>
+                            option.setName('reason')
+                                .setDescription('예외 사유 (예: 금요일 휴강, 크리스마스)')
+                                .setRequired(true)
+                        )
+                )
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('remove')
+                        .setDescription('예외 날짜를 제거합니다.')
+                        .addStringOption(option =>
+                            option.setName('day')
+                                .setDescription('제거할 예외 날짜 (형식: YYYYMMDD 또는 YYYY-MM-DD)')
+                                .setRequired(true)
+                        )
+                )
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('list')
+                        .setDescription('현재 등록된 예외 날짜 목록을 확인합니다.')
+                )
         ),
 
     async execute(interaction) {
         await interaction.deferReply();
 
+        const subcommandGroup = interaction.options.getSubcommandGroup(false);
         const subcommand = interaction.options.getSubcommand(false) || 'now';
         const { dateString, type, typeName, isNextWeek } = getCurrentMealInfo();
 
@@ -126,6 +162,39 @@ module.exports = {
                 } else {
                     return interaction.followUp("📋 저장된 식단 선호도가 없습니다. `/food reference` 옵션을 사용해 입력해 보세요!");
                 }
+            }
+        }
+
+        // 4. 예외 날짜 관리 처리 (/food exception)
+        if (subcommandGroup === 'exception') {
+            if (!isAdminUser(interaction.user.id)) {
+                return interaction.followUp("❌ 이 명령어는 봇 관리자만 사용할 수 있어! 🙅");
+            }
+
+            const day = interaction.options.getString('day');
+            const reason = interaction.options.getString('reason');
+
+            if (subcommand === 'add') {
+                const result = addSpecialDay(day, reason);
+                return interaction.followUp(result.message);
+            }
+
+            if (subcommand === 'remove') {
+                const result = removeSpecialDay(day);
+                return interaction.followUp(result.message);
+            }
+
+            if (subcommand === 'list') {
+                const list = getSpecialDaysList();
+                const keys = Object.keys(list);
+                if (keys.length === 0) {
+                    return interaction.followUp("📋 등록된 학식 예외 날짜가 없어!");
+                }
+                let msg = "📋 **학식 예외 날짜(휴강/공휴일) 목록**:\n";
+                keys.forEach(k => {
+                    msg += `- **${k}**: ${list[k]}\n`;
+                });
+                return interaction.followUp(msg);
             }
         }
     },
