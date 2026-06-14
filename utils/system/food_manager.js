@@ -7,7 +7,26 @@ const config = require('../../config/manage_environments.js');
 
 const FILE_PATH = path.join(__dirname, 'food_data.json');
 const DAYS_FILE_PATH = path.join(__dirname, 'exception_days.json');
+const FONT_PATH = path.join(__dirname, 'NanumGothic.ttf');
 const OWNER_IDS = config.discord.ownerId.split(',').map(id => id.trim()); // 여러 관리자 ID를 배열로 저장
+
+async function ensureFontExists() {
+    if (fs.existsSync(FONT_PATH)) return;
+    
+    console.log('[FoodManager] 나눔고딕 폰트가 로컬 폴더에 없습니다. 다운로드를 시작합니다...');
+    try {
+        const response = await axios({
+            url: 'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
+            method: 'GET',
+            responseType: 'arraybuffer'
+        });
+        fs.writeFileSync(FONT_PATH, response.data);
+        console.log('[FoodManager] 나눔고딕 폰트 다운로드 및 로컬 저장 완료!');
+    } catch (e) {
+        console.error('[FoodManager] 폰트 다운로드 실패:', e);
+    }
+}
+
 
 const defaultData = {
     lastManualSync: "",      
@@ -356,6 +375,18 @@ function getMenu(dateString, type) {
 }
 
 async function generateFoodImage(dateString, typeName, menuString) {
+    // 폰트 파일 다운로드 및 유무 확인
+    await ensureFontExists();
+
+    let fontBase64 = '';
+    try {
+        if (fs.existsSync(FONT_PATH)) {
+            fontBase64 = fs.readFileSync(FONT_PATH).toString('base64');
+        }
+    } catch (e) {
+        console.error('[FoodManager] 폰트 파일 읽기 실패:', e);
+    }
+
     const splitTextByLength = (text, maxLength) => {
         const result = [];
         for (let i = 0; i < text.length; i += maxLength) {
@@ -397,13 +428,30 @@ async function generateFoodImage(dateString, typeName, menuString) {
           <stop offset="0%" style="stop-color:#B3CFFB;stop-opacity:1" />
           <stop offset="100%" style="stop-color:#E3CAFD;stop-opacity:1" />
         </linearGradient>
+        ${fontBase64 ? `
+        <style>
+          @font-face {
+            font-family: 'NanumGothicEmbed';
+            src: url(data:font/ttf;base64,${fontBase64}) format('truetype');
+          }
+          .custom-text, .custom-text tspan {
+            font-family: 'NanumGothicEmbed', sans-serif !important;
+          }
+        </style>
+        ` : `
+        <style>
+          .custom-text, .custom-text tspan {
+            font-family: sans-serif;
+          }
+        </style>
+        `}
       </defs>
       <rect width="600" height="400" rx="32" ry="32" fill="url(#pastelGrad)"/>
       <rect x="25" y="25" width="550" height="350" rx="22" ry="22" fill="#ffffff" fill-opacity="0.6"/>
-      <text x="55" y="80" font-family="'NanumGothic', sans-serif" font-size="24" font-weight="bold" fill="#3B3A5F">🍽️ 학식 안내 (${typeName})</text>
-      <text x="545" y="75" font-family="'NanumGothic', sans-serif" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
+      <text x="55" y="80" class="custom-text" font-size="24" font-weight="bold" fill="#3B3A5F">🍽️ 학식 안내 (${typeName})</text>
+      <text x="545" y="75" class="custom-text" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
       <line x1="50" y1="105" x2="550" y2="105" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
-      <text x="80" y="${startY}" font-family="'NanumGothic', sans-serif" font-size="18" font-weight="bold" fill="#3B3A5F">
+      <text x="80" y="${startY}" class="custom-text" font-size="18" font-weight="bold" fill="#3B3A5F">
         ${tspanElements}
       </text>
     </svg>
