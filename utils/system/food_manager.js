@@ -2,27 +2,60 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const sharp = require('sharp');
 const config = require('../../config/manage_environments.js');
 
 const FILE_PATH = path.join(__dirname, 'food_data.json');
-const OWNER_ID = config.discord.ownerId;
+const DAYS_FILE_PATH = path.join(__dirname, '_days.json');
+const OWNER_IDS = config.discord.ownerId.split(',').map(id => id.trim()); // 여러 관리자 ID를 배열로 저장
 
 const defaultData = {
     lastManualSync: "",      
     lastAdminSyncTime: 0,    
     lastAutoSync: "",        
-    menus: {}           
+    menus: []           
 };
+
+function formatToHyphenDate(dateStr) {
+    if (!dateStr) return null;
+    if (/^\d{8}$/.test(dateStr)) {
+        return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+    }
+    return dateStr;
+}
+
+function getSpecialDayReason(dateString) {
+    try {
+        if (fs.existsSync(DAYS_FILE_PATH)) {
+            const content = fs.readFileSync(DAYS_FILE_PATH, 'utf8').trim();
+            if (content) {
+                const daysData = JSON.parse(content);
+                const formatted = formatToHyphenDate(dateString);
+                return daysData[formatted] || null;
+            }
+        }
+    } catch (e) {
+        console.error('❌ [FoodManager] _days.json 읽기 실패:', e);
+    }
+    return null;
+}
 
 function readData() {
     try {
         if (fs.existsSync(FILE_PATH)) {
-            return JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+            const data = JSON.parse(fs.readFileSync(FILE_PATH, 'utf8'));
+            if (data.menus && !Array.isArray(data.menus)) {
+                data.menus = [ data.menus ];
+            }
+            return data;
         }
     } catch (e) {
         console.error('❌ [FoodManager] JSON 읽기 실패:', e);
     }
-    return Object.assign({}, defaultData);
+    return JSON.parse(JSON.stringify(defaultData));
 }
 
 function saveData(data) {
@@ -60,32 +93,62 @@ function getNextWeekDateString() {
     return `${year}${month}${day}`; // 예: '20260525'
 }
 
+function getMondayOfDate(dateStr) {
+    const formatted = formatToHyphenDate(dateStr);
+    if (!formatted) return null;
+    
+    const d = new Date(formatted);
+    const day = d.getDay(); // 0:일, 1:월, ... 6:토
+    
+    // 일요일(0)이면 -6일, 월요일(1)이면 0일, 화요일(2)이면 -1일...
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    
+    const year = monday.getFullYear();
+    const month = String(monday.getMonth() + 1).padStart(2, '0');
+    const date = String(monday.getDate()).padStart(2, '0');
+    return `${year}${month}${date}`;
+}
+
+function getNextActiveSchoolDay(startDate) {
+    let checkDate = new Date(startDate);
+    for (let i = 0; i < 14; i++) {
+        const dayOfWeek = checkDate.getDay();
+        const dateStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+        
+        if (dayOfWeek !== 0 && dayOfWeek !== 6 && !getSpecialDayReason(dateStr)) {
+            return checkDate;
+        }
+        checkDate.setDate(checkDate.getDate() + 1);
+    }
+    return startDate;
+}
+
 function getCurrentMealInfo() {
     const kstDate = getKstDate();
-    const dayOfWeek = kstDate.getDay(); // 0:일, 1:월, ... 5:금, 6:토
+    const todayStr = getTodayString();
+    
+    const dayOfWeek = kstDate.getDay();
     const hours = kstDate.getHours();
     const minutes = kstDate.getMinutes();
     const time = hours * 100 + minutes;
 
-    let targetDate = new Date(kstDate); // 원본 객체 변형 방지를 위해 복사
+    let targetDate = new Date(kstDate);
     let type = '';
     let typeName = '';
     let isNextWeek = false;
 
-    // [주말 판별] 금요일 18시 이후, 토요일, 일요일
-    if ((dayOfWeek === 5 && time >= 1800) || dayOfWeek === 6 || dayOfWeek === 0) {
-        let daysToAdd = 1;
-        if (dayOfWeek === 5) daysToAdd = 3;      // 금요일이면 +3일 (월요일)
-        else if (dayOfWeek === 6) daysToAdd = 2; // 토요일이면 +2일 (월요일)
-        else if (dayOfWeek === 0) daysToAdd = 1; // 일요일이면 +1일 (월요일)
+    const isTodayOff = (dayOfWeek === 0 || dayOfWeek === 6 || getSpecialDayReason(todayStr) !== null);
 
-        targetDate.setDate(targetDate.getDate() + daysToAdd);
+    if (isTodayOff) {
+        const nextDay = new Date(kstDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        targetDate = getNextActiveSchoolDay(nextDay);
+        
         type = 'breakfast';
-        typeName = '☀️ 다음주 월요일 아침';
+        typeName = '☀️ 다음 수업일 아침';
         isNextWeek = true;
-    } 
-    // [평일 판별] 월~목, 금요일 18시 이전
-    else {
+    } else {
         if (time < 840) {
             type = 'breakfast';
             typeName = '☀️ 아침';
@@ -96,10 +159,13 @@ function getCurrentMealInfo() {
             type = 'dinner';
             typeName = '🌙 저녁';
         } else {
-            // 월~목 18시 이후 -> 다음날 아침 (금요일 18시 이후는 위 주말 판별에서 걸러짐)
-            targetDate.setDate(targetDate.getDate() + 1);
+            const nextDay = new Date(kstDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            targetDate = getNextActiveSchoolDay(nextDay);
+            
             type = 'breakfast';
-            typeName = '☀️ 내일 아침';
+            typeName = '☀️ 다음 수업일 아침';
+            isNextWeek = true;
         }
     }
 
@@ -181,13 +247,20 @@ async function crawlFoodData(targetDate = null) {
 }
 
 async function syncFoodData(isManual = false, userId = null, targetDate = null) {
+    const checkDate = targetDate ? formatToHyphenDate(targetDate) : getTodayString();
+    const specialReason = getSpecialDayReason(checkDate);
+    if (specialReason) {
+        return { success: false, message: `⚠️ 오늘은 **${specialReason}**이라 굳이 학교에 올 필요가 없어! 학식도 동기화할 필요가 없겠지? 😉` };
+    }
+
     const data = readData();
     const today = getTodayString();
     const now = Date.now();
     const COOLDOWN = 10 * 60 * 1000;
 
     if (isManual) {
-        const isAdmin = userId === OWNER_ID;
+
+        const isAdmin = OWNER_IDS.includes(userId);
 
         if (isAdmin) {
             if (data.lastAdminSyncTime && (now - data.lastAdminSyncTime < COOLDOWN)) {
@@ -206,10 +279,47 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
     }
 
     const crawledMenus = await crawlFoodData(targetDate);
-    data.menus = crawledMenus; 
+    
+    if (!Array.isArray(data.menus)) {
+        data.menus = [];
+    }
+
+    const newWeekMonday = getMondayOfDate(targetDate || getTodayString());
+
+    let existingIndex = -1;
+    for (let i = 0; i < data.menus.length; i++) {
+        const weekObj = data.menus[i];
+        const keys = Object.keys(weekObj);
+        if (keys.length > 0) {
+            const existingMonday = getMondayOfDate(keys[0]);
+            if (existingMonday === newWeekMonday) {
+                existingIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (existingIndex !== -1) {
+        data.menus[existingIndex] = crawledMenus;
+    } else {
+        data.menus.push(crawledMenus);
+    }
+
+    data.menus.sort((a, b) => {
+        const keyA = Object.keys(a)[0] || "";
+        const keyB = Object.keys(b)[0] || "";
+        const mondayA = getMondayOfDate(keyA) || "";
+        const mondayB = getMondayOfDate(keyB) || "";
+        return mondayA.localeCompare(mondayB);
+    });
+
+    while (data.menus.length > 3) {
+        data.menus.shift();
+    } 
     
     if (isManual) {
-        const isAdmin = userId === OWNER_ID;
+        const isAdmin = OWNER_IDS.includes(userId);
+        
         if (isAdmin) {
             data.lastAdminSyncTime = now;
             data.lastManualSync = today;
@@ -225,12 +335,87 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
 }
 
 function getMenu(dateString, type) {
+    const specialReason = getSpecialDayReason(dateString);
+    if (specialReason) {
+        return `오늘은 **${specialReason}**이라 굳이 학교에 오지 않아도 돼! 학식도 먹으러 안 와도 되겠지? 😉`;
+    }
+
     const data = readData();
-    const todayData = data.menus[dateString];
+    let todayData = null;
+    if (Array.isArray(data.menus)) {
+        for (const weekData of data.menus) {
+            if (weekData && weekData[dateString]) {
+                todayData = weekData[dateString];
+                break;
+            }
+        }
+    } else {
+        todayData = data.menus[dateString];
+    }
 
     if (!todayData) return "해당 날짜의 식단 정보가 없습니다.\n(아직 업데이트 전이거나 주말일 수 있어요. `/food refresh`를 시도해보세요!)";
     
     return todayData[type] || "해당 식사 정보가 없습니다.";
 }
 
-module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus, getKstDate };
+async function generateFoodImage(dateString, typeName, menuString) {
+    const splitTextByLength = (text, maxLength) => {
+        const result = [];
+        for (let i = 0; i < text.length; i += maxLength) {
+            result.push(text.slice(i, i + maxLength));
+        }
+        return result;
+    };
+
+    const rawMenus = menuString.split(',').map(m => m.trim()).filter(m => m.length > 0);
+    const menus = [];
+    rawMenus.forEach(item => {
+        if (item.length > 22) {
+            menus.push(...splitTextByLength(item, 22));
+        } else {
+            menus.push(item);
+        }
+    });
+
+    let tspanElements = '';
+    const isNoMenu = menus.length === 0 || menuString === "등록된 식단이 없습니다." || menuString.includes("식단 정보가 없습니다") || menuString.includes("해당 날짜의 식단 정보가 없습니다");
+
+    if (isNoMenu) {
+        tspanElements = `<tspan x="300" dy="70" font-size="20" font-weight="bold" fill="#6A698F" text-anchor="middle">등록된 식단이 없습니다 😥</tspan>
+                         <tspan x="300" dy="45" font-size="14" fill="#8A89AB" text-anchor="middle">(학식이 제공되지 않는 날일 수 있어요)</tspan>`;
+    } else {
+        menus.forEach((menu, index) => {
+            const dy = index === 0 ? 0 : 35;
+            tspanElements += `<tspan x="80" dy="${dy}" fill="#3B3A5F">  ${menu}</tspan>`;
+        });
+    }
+
+    const totalMenuHeight = isNoMenu ? 0 : (menus.length - 1) * 35;
+    const startY = isNoMenu ? 160 : Math.max(145, 120 + (255 - totalMenuHeight) / 2);
+
+    const svg = `
+    <svg width="600" height="400" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="pastelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#B3CFFB;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#E3CAFD;stop-opacity:1" />
+        </linearGradient>
+        <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+          <feDropShadow dx="1" dy="2" stdDeviation="2" flood-opacity="0.1"/>
+        </filter>
+      </defs>
+      <rect width="600" height="400" rx="32" ry="32" fill="url(#pastelGrad)"/>
+      <rect x="25" y="25" width="550" height="350" rx="22" ry="22" fill="#ffffff" fill-opacity="0.6"/>
+      <text x="55" y="80" font-family="'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="24" font-weight="bold" fill="#3B3A5F" filter="url(#shadow)">🍽️ 학식 안내 (${typeName})</text>
+      <text x="545" y="75" font-family="'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
+      <line x1="50" y1="105" x2="550" y2="105" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+      <text x="80" y="${startY}" font-family="'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif" font-size="18" font-weight="bold" fill="#3B3A5F">
+        ${tspanElements}
+      </text>
+    </svg>
+    `;
+
+    return await sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+module.exports = { syncFoodData, getMenu, getTodayString, getNextWeekDateString, getCurrentMealInfo, getAllMenus, getKstDate, getSpecialDayReason, getMondayOfDate, generateFoodImage };

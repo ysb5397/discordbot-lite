@@ -1,20 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const config = require('../../config/manage_environments.js');
 
 const FILE_PATH = path.join(__dirname, 'member_food_references.json');
-const OWNER_ID = config.discord.ownerId;
-const defaultData = {
-  "discord_id": {
-    "nickname": "",
-    "favorite": [
-      ""
-    ],
-    "dislike": [
-      ""
-    ]
-  }
-}
 
 function readData() {
     try {

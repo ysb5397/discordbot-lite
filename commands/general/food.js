@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getMenu, syncFoodData, getTodayString, getKstDate, getNextWeekDateString, getCurrentMealInfo } = require('../../utils/system/food_manager.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { getMenu, syncFoodData, getTodayString, getKstDate, getNextWeekDateString, getCurrentMealInfo, getSpecialDayReason, getMondayOfDate, generateFoodImage } = require('../../utils/system/food_manager.js');
 const { saveMemberFoodPreference, getMemberFoodPreference } = require('../../utils/system/member_food_reference_manager.js');
 
 module.exports = {
@@ -15,11 +15,6 @@ module.exports = {
             subcommand
                 .setName('refresh')
                 .setDescription('학식 데이터를 최신 상태로 동기화합니다. (일반 유저 1일 1회, 관리자 10분 1회)')
-                .addIntegerOption(option =>
-                    option.setName('day')
-                        .setDescription('동기화할 날짜를 선택하세요. 예시 - yyyyMMdd (선택하지 않으면 오늘 날짜로 동기화)')
-                        .setRequired(false)
-                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -46,16 +41,12 @@ module.exports = {
         await interaction.deferReply();
 
         const subcommand = interaction.options.getSubcommand(false) || 'now';
-        const dayOption = interaction.options.getInteger('day');
-
         const { dateString, type, typeName, isNextWeek } = getCurrentMealInfo();
-
-        const targetDateStr = dayOption ? dayOption.toString() : getNextWeekDateString();
 
         // 1. 동기화 명령어 처리 (/food refresh)
         if (subcommand === 'refresh') {
             try {
-                const syncDate = dayOption ? targetDateStr : (isNextWeek ? targetDateStr : null);
+                const syncDate = getNextWeekDateString();
                 const result = await syncFoodData(true, interaction.user.id, syncDate);
                 return interaction.followUp(result.message);
             } catch (err) {
@@ -66,25 +57,43 @@ module.exports = {
 
         // 2. 식단 조회 로직
         if (subcommand === 'now') {
+            const specialReason = getSpecialDayReason(dateString);
+            if (specialReason) {
+                const embed = new EmbedBuilder()
+                    .setColor(0xF39C12)
+                    .setTitle(`📆 특별 알림 (${typeName})`)
+                    .setDescription(`**[${dateString}]**\n\n오늘은 **${specialReason}**이야!\n굳이 학교에 안 와도 되니까, 학식 정보도 보여주지 않을게! 편히 쉬어~ 😴`)
+                    .setFooter({ text: '공휴일/휴강일 정보는 시스템에 의해 관리되고 있어.' });
+
+                return interaction.followUp({ embeds: [embed] });
+            }
+
             let menuString = getMenu(dateString, type);
 
             let breakfast = getMenu(dateString, 'breakfast');
             let lunch = getMenu(dateString, 'lunch');
 
-            if (breakfast === "등록된 식단이 없습니다." && lunch === "등록된 식단이 없습니다.") {
+            const isBreakfastEmpty = breakfast === "등록된 식단이 없습니다." || breakfast.includes("식단 정보가 없습니다");
+            const isLunchEmpty = lunch === "등록된 식단이 없습니다." || lunch.includes("식단 정보가 없습니다");
+
+            if (isBreakfastEmpty && isLunchEmpty) {
                 await syncFoodData(false, interaction.user.id, isNextWeek ? dateString : null);
                 
                 // 동기화 후 다시 해당 타입의 메뉴를 가져옴
                 menuString = getMenu(dateString, type);
             }
 
+            // 파스텔 그라데이션 이미지 굽기
+            const imageBuffer = await generateFoodImage(dateString, typeName, menuString);
+            const file = new AttachmentBuilder(imageBuffer, { name: 'food_menu.png' });
+
             const embed = new EmbedBuilder()
-                .setColor(0x2ECC71) 
+                .setColor(0xB3CFFB) 
                 .setTitle(`🍽️ 학식 안내 (${typeName})`)
-                .setDescription(`**[${dateString}]**\n\n${menuString}`)
+                .setImage('attachment://food_menu.png')
                 .setFooter({ text: '데이터 동기화가 필요하면 /food refresh를 사용하세요.' });
 
-            await interaction.followUp({ embeds: [embed] });
+            await interaction.followUp({ embeds: [embed], files: [file] });
         }
 
         // 3. 개인 식단 선호도 처리 (/food reference)

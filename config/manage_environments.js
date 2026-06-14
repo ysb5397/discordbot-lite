@@ -16,7 +16,7 @@ const config = {
         clientId: required('DISCORD_CLIENT_ID'),
         guildId: required('DISCORD_GUILD_ID'),
         logChannelId: required('DISCORD_LOG_CHANNEL_ID'),
-        ownerId: required('MY_DISCORD_USER_ID'),
+        ownerId: required('OWNER_ID'),
         baseMemberRoleId: required('BASE_MEMBER_ROLE_ID'),
         isDevBot: required('IS_DEV_BOT', 'false'), // 기본값 설정으로 안정성 강화
     },

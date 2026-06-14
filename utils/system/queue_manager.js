@@ -1,5 +1,5 @@
 const config = require('../../config/manage_environments.js');
-const OWNER_ID = config.discord.ownerId;
+const OWNER_IDS = config.discord.ownerId.split(',').map(id => id.trim());
 
 class QueueManager {
     constructor() {
@@ -14,7 +14,13 @@ class QueueManager {
      */
     canProcess(userId) {
         // 1. 관리자는 대기열 슬롯을 무시하고 무조건 통과
-        if (userId === OWNER_ID) return true;
+        let isOwner = false;
+        OWNER_IDS.forEach(ownerId => {
+            if (userId === ownerId) {
+                isOwner = true;
+            }
+        });
+        if (isOwner) return true;
 
         // 2. 현재 처리 중인 작업이 최대 슬롯(3개)보다 적으면 통과
         if (this.activeRequests < this.MAX_SLOTS) {
@@ -29,7 +35,13 @@ class QueueManager {
      * 요청 처리를 시작할 때 슬롯을 1개 차지합니다.
      */
     enter(userId) {
-        if (userId !== OWNER_ID) {
+        let isOwner = false;
+        OWNER_IDS.forEach(ownerId => {
+            if (userId === ownerId) {
+                isOwner = true;
+            }
+        });
+        if (!isOwner) {
             this.activeRequests++;
             console.log(`📥 [Queue] 요청 들어옴 (현재 사용중: ${this.activeRequests}/${this.MAX_SLOTS})`);
         }
@@ -39,7 +51,13 @@ class QueueManager {
      * 요청 처리가 끝났을 때(성공/실패 무관) 슬롯을 반환합니다.
      */
     leave(userId) {
-        if (userId !== OWNER_ID) {
+        let isOwner = false;
+        OWNER_IDS.forEach(ownerId => {
+            if (userId === ownerId) {
+                isOwner = true;
+            }
+        });
+        if (!isOwner) {
             this.activeRequests--;
             if (this.activeRequests < 0) this.activeRequests = 0; // 혹시 모를 음수 방지
             console.log(`📤 [Queue] 요청 끝남 (현재 사용중: ${this.activeRequests}/${this.MAX_SLOTS})`);
