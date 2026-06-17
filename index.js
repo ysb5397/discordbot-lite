@@ -1,9 +1,31 @@
 // index.js
-// --- [Termux 대응] Fontconfig 독립형 로컬 설정 주입 (sharp 한글 폰트 렌더링) ---
-const path = require('node:path');
-process.env.FONTCONFIG_PATH = __dirname; 
-
+// --- [Termux/모든환경 대응] Fontconfig 로컬 설정 동적 생성 및 주입 ---
 const fs = require('node:fs');
+const path = require('node:path');
+
+const fontsDir = path.join(__dirname, 'fonts');
+const cacheDir = path.join(__dirname, '.fontcache');
+const configPath = path.join(__dirname, 'fonts.conf');
+
+const xmlContent = `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>${fontsDir.replace(/\\/g, '/')}</dir>
+  <cachedir>${cacheDir.replace(/\\/g, '/')}</cachedir>
+  <config></config>
+  <match target="pattern">
+    <edit name="family" mode="assign" binding="strong">
+      <string>NanumGothic</string>
+    </edit>
+  </match>
+</fontconfig>`;
+
+if (!fs.existsSync(fontsDir)) fs.mkdirSync(fontsDir, { recursive: true });
+if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+fs.writeFileSync(configPath, xmlContent, 'utf8');
+
+process.env.FONTCONFIG_PATH = __dirname;
+process.env.FONTCONFIG_FILE = configPath;
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const config = require('./config/manage_environments.js');
 const { logToDiscord } = require('./utils/system/catch_log');

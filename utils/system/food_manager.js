@@ -7,7 +7,7 @@ const config = require('../../config/manage_environments.js');
 
 const FILE_PATH = path.join(__dirname, 'food_data.json');
 const DAYS_FILE_PATH = path.join(__dirname, 'exception_days.json');
-const FONT_PATH = path.join(__dirname, 'NanumGothic.ttf');
+const FONT_PATH = path.join(__dirname, '../../fonts/NanumGothic.ttf');
 const OWNER_IDS = config.discord.ownerId.split(',').map(id => id.trim()); // 여러 관리자 ID를 배열로 저장
 
 async function ensureFontExists() {
