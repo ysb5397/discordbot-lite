@@ -107,7 +107,25 @@ module.exports = {
 
         } catch (error) {
             console.error('학식 AI 응답 처리 중 에러:', error);
-            return message.reply('앗! 학식 정보를 AI로 처리하다가 에러가 났어! (콘솔 확인해봐!)');
+            
+            let errorMessage = '앗! 학식 정보를 AI로 처리하다가 알 수 없는 에러가 났어! 😭';
+            const errorStr = error.message || String(error);
+
+            if (errorStr.includes('503') || errorStr.toLowerCase().includes('service unavailable')) {
+                errorMessage = '⚙️ **[AI 서비스 일시 중단 (503)]**\n지금 Gemini 서버가 많이 혼잡해서 대답을 할 수 없대! ㅠㅠ 잠시 후에 다시 나를 불러줘! 🥺';
+            } else if (errorStr.includes('429') || errorStr.toLowerCase().includes('quota') || errorStr.toLowerCase().includes('too many requests')) {
+                errorMessage = '⏳ **[요청 한도 초과 (429)]**\n지금 나한테 질문이 너무 많이 몰렸어! 무료 제공량이 부족해서 대답을 못하니 잠시 후에 다시 요청해줘! 😭';
+            } else if (errorStr.includes('400') || errorStr.toLowerCase().includes('bad request')) {
+                errorMessage = '⚠️ **[잘못된 요청 (400)]**\n질문 형식이나 질문 내용이 조금 이상해서 제미나이가 이해를 못 한 것 같아. 질문을 조금 다르게 해봐!';
+            } else if (errorStr.includes('403') || errorStr.toLowerCase().includes('permission') || errorStr.includes('API key')) {
+                errorMessage = '🔑 **[권한/키 인증 오류 (403)]**\n제미나이 API 키 인증에 실패했거나 접근 권한이 없대. 관리자한테 API 키 상태를 확인하라고 알려줘!';
+            } else if (errorStr.toLowerCase().includes('timeout')) {
+                errorMessage = '⏱️ **[시간 초과]**\n제미나이 서버가 너무 늦게 답해서 응답을 기다리지 못했어. 다시 시도해줘!';
+            } else {
+                errorMessage = `앗! 학식 정보를 AI로 처리하다가 에러가 발생했어! 😭\n\n**[상세 에러 로그]**\n\`${errorStr.slice(0, 150)}...\``;
+            }
+
+            return message.reply(errorMessage);
         }
     },
 };

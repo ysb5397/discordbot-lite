@@ -423,9 +423,15 @@ async function generateFoodImage(dateString, typeName, menuString) {
 
     const paths = [];
 
+    // [디버깅] 렌더링에 주입되는 데이터 원본 로그 출력
+    console.log(`[EQK-DEBUG] normalizedMenu: "${normalizedMenu}"`);
+    console.log(`[EQK-DEBUG] menus:`, menus);
+
     // 1. 제목 그리기 (이모지가 정제된 cleanTypeName 사용)
     const titleText = `학식 안내 (${cleanTypeName})`;
-    paths.push(getSvgPath(titleText, 95, 71, 24, '#3B3A5F', true));
+    const titlePath = getSvgPath(titleText, 95, 71, 24, '#3B3A5F', true);
+    console.log(`[EQK-DEBUG] 제목 [${titleText}] -> 패스 길이: ${titlePath.length}`);
+    paths.push(titlePath);
 
     // 2. 날짜 그리기 (정밀 정규화된 cleanDateString 사용)
     const dateWidth = font.getAdvanceWidth(cleanDateString, 14);
@@ -453,8 +459,9 @@ async function generateFoodImage(dateString, typeName, menuString) {
         
         menus.forEach((menu, index) => {
             const y = menuTop + index * lineSpacing;
-            // bullet 기호 (•) 와 함께 메뉴 그리기
-            paths.push(getSvgPath(`• ${menu}`, 60, y, 18, '#3B3A5F', true));
+            const menuPath = getSvgPath(`• ${menu}`, 60, y, 18, '#3B3A5F', true);
+            console.log(`[EQK-DEBUG] 메뉴 [${menu}] -> 패스 길이: ${menuPath.length}`);
+            paths.push(menuPath);
         });
     }
 
