@@ -7,6 +7,7 @@ const config = require('../../config/manage_environments.js');
 const EQK_AUTH_KEY = config.etc.earthquakeKey;
 // 저장할 파일 경로 (현재 파일 위치 기준 data 폴더 또는 루트)
 const SAVE_PATH = path.join(__dirname, 'last_eq.txt'); 
+const LAST_QUERY_PATH = path.join(__dirname, 'last_eq_query.txt');
 
 // --- 설정 변수 ---
 const EQ_API_CONFIG = {
@@ -41,6 +42,29 @@ function saveLastNotifiedIssue(tmIssue) {
         fs.writeFileSync(SAVE_PATH, tmIssue, 'utf8');
     } catch (err) {
         console.error('[EQK] 파일을 저장하는 중 오류 발생:', err);
+    }
+}
+
+// [파일 로직] 마지막 API 요청 시각 읽기
+function getLastQueryTime() {
+    try {
+        if (fs.existsSync(LAST_QUERY_PATH)) {
+            const timeStr = fs.readFileSync(LAST_QUERY_PATH, 'utf8').trim();
+            const time = parseInt(timeStr, 10);
+            if (!isNaN(time)) return time;
+        }
+    } catch (err) {
+        console.error('[EQK] 마지막 쿼리 시각 파일을 읽는 중 오류 발생:', err);
+    }
+    return 0;
+}
+
+// [파일 로직] 마지막 API 요청 시각 저장하기
+function saveLastQueryTime(time) {
+    try {
+        fs.writeFileSync(LAST_QUERY_PATH, String(time), 'utf8');
+    } catch (err) {
+        console.error('[EQK] 마지막 쿼리 시각 파일을 저장하는 중 오류 발생:', err);
     }
 }
 
@@ -83,7 +107,24 @@ async function checkEarthquakeAndNotify(client) {
 }
 
 async function scheduleCheck(client) {
+    const now = Date.now();
+    const lastQuery = getLastQueryTime();
+    const elapsed = now - lastQuery;
+
+    // 만약 마지막 호출로부터 INITIAL_DELAY(60초)가 지나지 않았다면, 남은 시간만큼 대기했다가 다시 scheduleCheck 호출
+    if (elapsed < INITIAL_DELAY) {
+        const waitTime = INITIAL_DELAY - elapsed;
+        console.log(`[EQK] 마지막 API 요청으로부터 ${Math.round(elapsed / 1000)}초 경과했습니다. 제재 방지를 위해 ${Math.round(waitTime / 1000)}초 대기 후 검사를 진행합니다!`);
+        earthquakeMonitorStatus = '대기 중...';
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => scheduleCheck(client), waitTime);
+        return;
+    }
+
     try {
+        // API 요청 전 마지막 쿼리 시각 갱신
+        saveLastQueryTime(Date.now());
+        
         await checkEarthquakeAndNotify(client);
         earthquakeMonitorStatus = '정상';
         currentDelay = INITIAL_DELAY;

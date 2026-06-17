@@ -378,15 +378,6 @@ async function generateFoodImage(dateString, typeName, menuString) {
     // 폰트 파일 다운로드 및 유무 확인
     await ensureFontExists();
 
-    let fontBase64 = '';
-    try {
-        if (fs.existsSync(FONT_PATH)) {
-            fontBase64 = fs.readFileSync(FONT_PATH).toString('base64');
-        }
-    } catch (e) {
-        console.error('[FoodManager] 폰트 파일 읽기 실패:', e);
-    }
-
     const splitTextByLength = (text, maxLength) => {
         const result = [];
         for (let i = 0; i < text.length; i += maxLength) {
@@ -405,61 +396,104 @@ async function generateFoodImage(dateString, typeName, menuString) {
         }
     });
 
-    let tspanElements = '';
     const isNoMenu = menus.length === 0 || menuString === "등록된 식단이 없습니다." || menuString.includes("식단 정보가 없습니다") || menuString.includes("해당 날짜의 식단 정보가 없습니다");
 
-    if (isNoMenu) {
-        tspanElements = `<tspan x="300" dy="70" font-size="20" font-weight="bold" fill="#6A698F" text-anchor="middle">등록된 식단이 없습니다 😥</tspan>
-                         <tspan x="300" dy="45" font-size="14" fill="#8A89AB" text-anchor="middle">(학식이 제공되지 않는 날일 수 있어요)</tspan>`;
-    } else {
-        menus.forEach((menu, index) => {
-            const dy = index === 0 ? 0 : 35;
-            tspanElements += `<tspan x="80" dy="${dy}" fill="#3B3A5F">  ${menu}</tspan>`;
-        });
-    }
-
-    const totalMenuHeight = isNoMenu ? 0 : (menus.length - 1) * 35;
-    const startY = isNoMenu ? 160 : Math.max(145, 120 + (255 - totalMenuHeight) / 2);
-
-    const svg = `
+    // --- 1단계: 배경 SVG (텍스트 없이 도형만) ---
+    const bgSvg = `
     <svg width="600" height="400" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="pastelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" style="stop-color:#B3CFFB;stop-opacity:1" />
           <stop offset="100%" style="stop-color:#E3CAFD;stop-opacity:1" />
         </linearGradient>
-        ${fontBase64 ? `
-        <style>
-          @font-face {
-            font-family: 'NanumGothicEmbed';
-            src: url(data:font/ttf;base64,${fontBase64}) format('truetype');
-          }
-          .custom-text, .custom-text tspan {
-            font-family: 'NanumGothicEmbed', sans-serif !important;
-          }
-        </style>
-        ` : `
-        <style>
-          .custom-text, .custom-text tspan {
-            font-family: 'NanumGothic', sans-serif;
-          }
-        </style>
-        `}
       </defs>
       <rect width="600" height="400" rx="32" ry="32" fill="url(#pastelGrad)"/>
       <rect x="25" y="25" width="550" height="350" rx="22" ry="22" fill="#ffffff" fill-opacity="0.6"/>
-      <text x="55" y="80" class="custom-text" font-size="24" font-weight="bold" fill="#3B3A5F">🍽️ 학식 안내 (${typeName})</text>
-      <text x="545" y="75" class="custom-text" font-size="14" font-weight="bold" fill="#6B698F" text-anchor="end">${dateString}</text>
       <line x1="50" y1="105" x2="550" y2="105" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
-      <text x="80" y="${startY}" class="custom-text" font-size="18" font-weight="bold" fill="#3B3A5F">
-        ${tspanElements}
-      </text>
     </svg>
     `;
 
-    fs.writeFileSync('test_debug.svg', svg, 'utf8');
-    console.log('🎨 디버깅용 SVG 원본 파일 저장 완료! (test_debug.svg)');
-    return await sharp(Buffer.from(svg)).png().toBuffer();
+    const bgBuffer = await sharp(Buffer.from(bgSvg)).png().toBuffer();
+
+    // --- 2단계: sharp Pango 텍스트 렌더링 (fontfile 직접 지정으로 Fontconfig 우회) ---
+    const fontFileOption = fs.existsSync(FONT_PATH) ? FONT_PATH : undefined;
+
+    // 제목 텍스트: "🍽️ 학식 안내 (타입명)"
+    const titleText = `🍽️ 학식 안내 (${typeName})`;
+    const titleBuffer = await sharp({
+        text: {
+            text: `<span font_weight="bold" foreground="#3B3A5F" font="24">${escapeXml(titleText)}</span>`,
+            fontfile: fontFileOption,
+            font: 'NanumGothic',
+            dpi: 150,
+            rgba: true,
+            width: 420,
+        }
+    }).png().toBuffer();
+
+    // 날짜 텍스트
+    const dateBuffer = await sharp({
+        text: {
+            text: `<span font_weight="bold" foreground="#6B698F" font="14">${escapeXml(dateString)}</span>`,
+            fontfile: fontFileOption,
+            font: 'NanumGothic',
+            dpi: 150,
+            rgba: true,
+        }
+    }).png().toBuffer();
+
+    // 메뉴 텍스트 (여러 줄)
+    let menuPangoText = '';
+    if (isNoMenu) {
+        menuPangoText = `<span font_weight="bold" foreground="#6A698F" font="20">등록된 식단이 없습니다 😥</span>\n<span foreground="#8A89AB" font="14">(학식이 제공되지 않는 날일 수 있어요)</span>`;
+    } else {
+        menuPangoText = menus.map(m => `<span font_weight="bold" foreground="#3B3A5F" font="18">  ${escapeXml(m)}</span>`).join('\n');
+    }
+
+    const menuBuffer = await sharp({
+        text: {
+            text: menuPangoText,
+            fontfile: fontFileOption,
+            font: 'NanumGothic',
+            dpi: 150,
+            rgba: true,
+            width: 470,
+            spacing: 10,
+        }
+    }).png().toBuffer();
+
+    // --- 3단계: 날짜 텍스트의 위치를 우측 정렬하기 위한 메타데이터 취득 ---
+    const dateMeta = await sharp(dateBuffer).metadata();
+    const dateLeft = Math.max(0, 545 - (dateMeta.width || 100));
+
+    // 메뉴 텍스트의 수직 중앙 정렬을 위한 메타데이터 취득
+    const menuMeta = await sharp(menuBuffer).metadata();
+    const menuAreaTop = 120;
+    const menuAreaBottom = 375;
+    const menuTop = isNoMenu
+        ? Math.max(menuAreaTop, menuAreaTop + (menuAreaBottom - menuAreaTop - (menuMeta.height || 0)) / 2)
+        : Math.max(menuAreaTop, menuAreaTop + (menuAreaBottom - menuAreaTop - (menuMeta.height || 0)) / 2);
+
+    // --- 4단계: 모든 레이어를 합성 ---
+    const result = await sharp(bgBuffer)
+        .composite([
+            { input: titleBuffer, top: 55, left: 55 },
+            { input: dateBuffer, top: 58, left: dateLeft },
+            { input: menuBuffer, top: Math.round(menuTop), left: isNoMenu ? 65 : 60 },
+        ])
+        .png()
+        .toBuffer();
+
+    return result;
+}
+
+function escapeXml(str) {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
 }
 
 function isAdminUser(userId) {
