@@ -142,6 +142,8 @@ dist
 .svelte-kit
 
 package-lock.json
+package.json
+yarn.lock
 
 # env
 .env
