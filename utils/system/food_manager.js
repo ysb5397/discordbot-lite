@@ -15,6 +15,10 @@ async function ensureFontExists() {
     
     console.log('[FoodManager] 나눔고딕 폰트가 로컬 폴더에 없습니다. 다운로드를 시작합니다...');
     try {
+        const dir = path.dirname(FONT_PATH);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
         const response = await axios({
             url: 'https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf',
             method: 'GET',
@@ -378,6 +382,10 @@ async function generateFoodImage(dateString, typeName, menuString) {
     // 폰트 파일 다운로드 및 유무 확인
     await ensureFontExists();
 
+    const opentype = require('opentype.js');
+    const fontBuffer = fs.readFileSync(FONT_PATH);
+    const font = opentype.parse(fontBuffer.buffer.slice(fontBuffer.byteOffset, fontBuffer.byteOffset + fontBuffer.byteLength));
+
     const splitTextByLength = (text, maxLength) => {
         const result = [];
         for (let i = 0; i < text.length; i += maxLength) {
@@ -398,8 +406,54 @@ async function generateFoodImage(dateString, typeName, menuString) {
 
     const isNoMenu = menus.length === 0 || menuString === "등록된 식단이 없습니다." || menuString.includes("식단 정보가 없습니다") || menuString.includes("해당 날짜의 식단 정보가 없습니다");
 
-    // --- 1단계: 배경 SVG (텍스트 없이 도형만) ---
-    const bgSvg = `
+    const getSvgPath = (text, x, y, fontSize, fill = '#3B3A5F', bold = false) => {
+        const pathObj = font.getPath(text, x, y, fontSize, { kerning: true });
+        const pathData = pathObj.toPathData(2);
+        if (bold) {
+            const strokeWidth = (fontSize * 0.035).toFixed(2);
+            return `<path d="${pathData}" fill="${fill}" stroke="${fill}" stroke-width="${strokeWidth}" stroke-linejoin="round" stroke-linecap="round" />`;
+        }
+        return `<path d="${pathData}" fill="${fill}" />`;
+    };
+
+    const paths = [];
+
+    // 1. 제목 그리기 (🍽️ 이모지는 나눔고딕에 없으므로 데코 아이콘으로 대체하고 텍스트만 렌더링)
+    const titleText = `학식 안내 (${typeName})`;
+    paths.push(getSvgPath(titleText, 95, 71, 24, '#3B3A5F', true));
+
+    // 2. 날짜 그리기
+    const dateWidth = font.getAdvanceWidth(dateString, 14);
+    const dateLeft = 545 - dateWidth;
+    paths.push(getSvgPath(dateString, dateLeft, 68, 14, '#6B698F', true));
+
+    // 3. 메뉴 그리기
+    if (isNoMenu) {
+        const msg2 = "(학식이 제공되지 않는 날일 수 있어요)";
+        const cleanMsg1 = "등록된 식단이 없습니다.";
+        
+        const w1 = font.getAdvanceWidth(cleanMsg1, 20);
+        const w2 = font.getAdvanceWidth(msg2, 14);
+        
+        paths.push(getSvgPath(cleanMsg1, 300 - w1 / 2, 210, 20, '#6A698F', true));
+        paths.push(getSvgPath(msg2, 300 - w2 / 2, 250, 14, '#8A89AB', false));
+    } else {
+        const lineSpacing = 32;
+        const totalHeight = menus.length * lineSpacing - 14;
+        const menuAreaTop = 110;
+        const menuAreaBottom = 370;
+        const menuAreaHeight = menuAreaBottom - menuAreaTop;
+        
+        const menuTop = menuAreaTop + (menuAreaHeight - totalHeight) / 2 + 18; // 18은 폰트 크기 보정(첫 줄 Y)
+        
+        menus.forEach((menu, index) => {
+            const y = menuTop + index * lineSpacing;
+            // bullet 기호 (•) 와 함께 메뉴 그리기
+            paths.push(getSvgPath(`• ${menu}`, 60, y, 18, '#3B3A5F', true));
+        });
+    }
+
+    const svgContent = `
     <svg width="600" height="400" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="pastelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -407,93 +461,27 @@ async function generateFoodImage(dateString, typeName, menuString) {
           <stop offset="100%" style="stop-color:#E3CAFD;stop-opacity:1" />
         </linearGradient>
       </defs>
+      <!-- 배경 -->
       <rect width="600" height="400" rx="32" ry="32" fill="url(#pastelGrad)"/>
+      <!-- 반투명 카드 -->
       <rect x="25" y="25" width="550" height="350" rx="22" ry="22" fill="#ffffff" fill-opacity="0.6"/>
+      <!-- 구분선 -->
       <line x1="50" y1="105" x2="550" y2="105" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+      
+      <!-- 숟가락 & 포크 데코레이션 아이콘 -->
+      <g transform="translate(50, 42) scale(0.95)">
+        <circle cx="20" cy="20" r="18" fill="#3B3A5F" opacity="0.1" />
+        <path d="M12,9 L12,17 M15,9 L15,17 M18,9 L18,17 M12,17 C12,21 18,21 18,17 L18,17 M15,21 L15,29" stroke="#3B3A5F" stroke-width="2" stroke-linecap="round" fill="none" />
+        <path d="M25,11 C22,11 22,21 25,21 C28,21 28,11 25,11 Z M25,21 L25,29" fill="#3B3A5F" stroke="#3B3A5F" stroke-width="0.8" />
+      </g>
+      
+      <!-- 텍스트 Path 목록 -->
+      ${paths.join('\n')}
     </svg>
     `;
 
-    const bgBuffer = await sharp(Buffer.from(bgSvg)).png().toBuffer();
-
-    // --- 2단계: sharp Pango 텍스트 렌더링 (fontfile 직접 지정으로 Fontconfig 우회) ---
-    const fontFileOption = fs.existsSync(FONT_PATH) ? FONT_PATH : undefined;
-
-    // 제목 텍스트: "🍽️ 학식 안내 (타입명)"
-    const titleText = `🍽️ 학식 안내 (${typeName})`;
-    const titleBuffer = await sharp({
-        text: {
-            text: `<span font_weight="bold" foreground="#3B3A5F" font="24">${escapeXml(titleText)}</span>`,
-            fontfile: fontFileOption,
-            font: 'NanumGothic',
-            dpi: 150,
-            rgba: true,
-            width: 420,
-        }
-    }).png().toBuffer();
-
-    // 날짜 텍스트
-    const dateBuffer = await sharp({
-        text: {
-            text: `<span font_weight="bold" foreground="#6B698F" font="14">${escapeXml(dateString)}</span>`,
-            fontfile: fontFileOption,
-            font: 'NanumGothic',
-            dpi: 150,
-            rgba: true,
-        }
-    }).png().toBuffer();
-
-    // 메뉴 텍스트 (여러 줄)
-    let menuPangoText = '';
-    if (isNoMenu) {
-        menuPangoText = `<span font_weight="bold" foreground="#6A698F" font="20">등록된 식단이 없습니다 😥</span>\n<span foreground="#8A89AB" font="14">(학식이 제공되지 않는 날일 수 있어요)</span>`;
-    } else {
-        menuPangoText = menus.map(m => `<span font_weight="bold" foreground="#3B3A5F" font="18">  ${escapeXml(m)}</span>`).join('\n');
-    }
-
-    const menuBuffer = await sharp({
-        text: {
-            text: menuPangoText,
-            fontfile: fontFileOption,
-            font: 'NanumGothic',
-            dpi: 150,
-            rgba: true,
-            width: 470,
-            spacing: 10,
-        }
-    }).png().toBuffer();
-
-    // --- 3단계: 날짜 텍스트의 위치를 우측 정렬하기 위한 메타데이터 취득 ---
-    const dateMeta = await sharp(dateBuffer).metadata();
-    const dateLeft = Math.max(0, 545 - (dateMeta.width || 100));
-
-    // 메뉴 텍스트의 수직 중앙 정렬을 위한 메타데이터 취득
-    const menuMeta = await sharp(menuBuffer).metadata();
-    const menuAreaTop = 120;
-    const menuAreaBottom = 375;
-    const menuTop = isNoMenu
-        ? Math.max(menuAreaTop, menuAreaTop + (menuAreaBottom - menuAreaTop - (menuMeta.height || 0)) / 2)
-        : Math.max(menuAreaTop, menuAreaTop + (menuAreaBottom - menuAreaTop - (menuMeta.height || 0)) / 2);
-
-    // --- 4단계: 모든 레이어를 합성 ---
-    const result = await sharp(bgBuffer)
-        .composite([
-            { input: titleBuffer, top: 55, left: 55 },
-            { input: dateBuffer, top: 58, left: dateLeft },
-            { input: menuBuffer, top: Math.round(menuTop), left: isNoMenu ? 65 : 60 },
-        ])
-        .png()
-        .toBuffer();
-
+    const result = await sharp(Buffer.from(svgContent)).png().toBuffer();
     return result;
-}
-
-function escapeXml(str) {
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;');
 }
 
 function isAdminUser(userId) {
