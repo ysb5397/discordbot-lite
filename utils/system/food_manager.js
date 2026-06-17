@@ -386,6 +386,11 @@ async function generateFoodImage(dateString, typeName, menuString) {
     const fontBuffer = fs.readFileSync(FONT_PATH);
     const font = opentype.parse(fontBuffer.buffer.slice(fontBuffer.byteOffset, fontBuffer.byteOffset + fontBuffer.byteLength));
 
+    // 유니코드 NFC 정규화로 NFD(자모분리) 현상 방지 및 이모지 공백 제거
+    const cleanTypeName = typeName.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').trim().normalize('NFC');
+    const cleanDateString = dateString.normalize('NFC');
+    const normalizedMenu = menuString.normalize('NFC');
+
     const splitTextByLength = (text, maxLength) => {
         const result = [];
         for (let i = 0; i < text.length; i += maxLength) {
@@ -394,7 +399,7 @@ async function generateFoodImage(dateString, typeName, menuString) {
         return result;
     };
 
-    const rawMenus = menuString.split(',').map(m => m.trim()).filter(m => m.length > 0);
+    const rawMenus = normalizedMenu.split(',').map(m => m.trim()).filter(m => m.length > 0);
     const menus = [];
     rawMenus.forEach(item => {
         if (item.length > 22) {
@@ -404,7 +409,7 @@ async function generateFoodImage(dateString, typeName, menuString) {
         }
     });
 
-    const isNoMenu = menus.length === 0 || menuString === "등록된 식단이 없습니다." || menuString.includes("식단 정보가 없습니다") || menuString.includes("해당 날짜의 식단 정보가 없습니다");
+    const isNoMenu = menus.length === 0 || normalizedMenu === "등록된 식단이 없습니다." || normalizedMenu.includes("식단 정보가 없습니다") || normalizedMenu.includes("해당 날짜의 식단 정보가 없습니다");
 
     const getSvgPath = (text, x, y, fontSize, fill = '#3B3A5F', bold = false) => {
         const pathObj = font.getPath(text, x, y, fontSize, { kerning: true });
@@ -418,14 +423,14 @@ async function generateFoodImage(dateString, typeName, menuString) {
 
     const paths = [];
 
-    // 1. 제목 그리기 (🍽️ 이모지는 나눔고딕에 없으므로 데코 아이콘으로 대체하고 텍스트만 렌더링)
-    const titleText = `학식 안내 (${typeName})`;
+    // 1. 제목 그리기 (이모지가 정제된 cleanTypeName 사용)
+    const titleText = `학식 안내 (${cleanTypeName})`;
     paths.push(getSvgPath(titleText, 95, 71, 24, '#3B3A5F', true));
 
-    // 2. 날짜 그리기
-    const dateWidth = font.getAdvanceWidth(dateString, 14);
+    // 2. 날짜 그리기 (정밀 정규화된 cleanDateString 사용)
+    const dateWidth = font.getAdvanceWidth(cleanDateString, 14);
     const dateLeft = 545 - dateWidth;
-    paths.push(getSvgPath(dateString, dateLeft, 68, 14, '#6B698F', true));
+    paths.push(getSvgPath(cleanDateString, dateLeft, 68, 14, '#6B698F', true));
 
     // 3. 메뉴 그리기
     if (isNoMenu) {
