@@ -441,7 +441,7 @@ async function generateFoodImage(dateString, typeName, menuString) {
         ` : `
         <style>
           .custom-text, .custom-text tspan {
-            font-family: sans-serif;
+            font-family: 'NanumGothic', sans-serif;
           }
         </style>
         `}
@@ -457,6 +457,8 @@ async function generateFoodImage(dateString, typeName, menuString) {
     </svg>
     `;
 
+    fs.writeFileSync('test_debug.svg', svg, 'utf8');
+    console.log('🎨 디버깅용 SVG 원본 파일 저장 완료! (test_debug.svg)');
     return await sharp(Buffer.from(svg)).png().toBuffer();
 }
 
