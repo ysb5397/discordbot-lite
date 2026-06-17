@@ -1,6 +1,9 @@
 // index.js
-const fs = require('node:fs');
+// --- [Termux 대응] Fontconfig 독립형 로컬 설정 주입 (sharp 한글 폰트 렌더링) ---
 const path = require('node:path');
+process.env.FONTCONFIG_PATH = __dirname; 
+
+const fs = require('node:fs');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const config = require('./config/manage_environments.js');
 const { logToDiscord } = require('./utils/system/catch_log');

@@ -152,4 +152,11 @@ utils/system/food_data.json
 utils/system/member_food_references.json
 utils/system/exception_days.json
 
+# font
+utils/system/NanumGothicCoding.ttf
+
+# Fontconfig 로컬 설정 및 캐시 폴더 제외
+fonts.conf
+.fontcache/
+
 # End of https://www.toptal.com/developers/gitignore/api/node
