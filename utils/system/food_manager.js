@@ -73,6 +73,10 @@ function readData() {
             if (data.menus && !Array.isArray(data.menus)) {
                 data.menus = [ data.menus ];
             }
+            // 3주치(저번 주, 이번 주, 다음 주) 데이터만 유지하도록 정제
+            if (data.menus) {
+                data.menus = cleanOldAndFutureMenus(data.menus);
+            }
             return data;
         }
     } catch (e) {
@@ -129,6 +133,45 @@ function getMondayOfDate(dateStr) {
     const month = String(monday.getMonth() + 1).padStart(2, '0');
     const date = String(monday.getDate()).padStart(2, '0');
     return `${year}${month}${date}`;
+}
+
+function getThreeWeeksMondays() {
+    const today = getTodayString(); // 'YYYY-MM-DD'
+    const thisMondayStr = getMondayOfDate(today); // 'YYYYMMDD'
+    
+    const formattedThisMonday = formatToHyphenDate(thisMondayStr);
+    const thisMonday = new Date(formattedThisMonday);
+    
+    // 저번 주 월요일
+    const lastMonday = new Date(thisMonday);
+    lastMonday.setDate(lastMonday.getDate() - 7);
+    const lastMondayStr = getMondayOfDate(`${lastMonday.getFullYear()}-${String(lastMonday.getMonth() + 1).padStart(2, '0')}-${String(lastMonday.getDate()).padStart(2, '0')}`);
+    
+    // 다음 주 월요일
+    const nextMonday = new Date(thisMonday);
+    nextMonday.setDate(nextMonday.getDate() + 7);
+    const nextMondayStr = getMondayOfDate(`${nextMonday.getFullYear()}-${String(nextMonday.getMonth() + 1).padStart(2, '0')}-${String(nextMonday.getDate()).padStart(2, '0')}`);
+    
+    return {
+        lastMonday: lastMondayStr,
+        thisMonday: thisMondayStr,
+        nextMonday: nextMondayStr
+    };
+}
+
+function cleanOldAndFutureMenus(menus) {
+    if (!Array.isArray(menus)) return [];
+    
+    const { lastMonday, thisMonday, nextMonday } = getThreeWeeksMondays();
+    const allowedMondays = [lastMonday, thisMonday, nextMonday];
+    
+    return menus.filter(weekObj => {
+        const keys = Object.keys(weekObj);
+        if (keys.length === 0) return false;
+        
+        const weekMonday = getMondayOfDate(keys[0]);
+        return allowedMondays.includes(weekMonday);
+    });
 }
 
 function getNextActiveSchoolDay(startDate) {
@@ -213,6 +256,9 @@ async function crawlFoodData(targetDate = null) {
             const month = String(today.getMonth() + 1).padStart(2, '0');
             const day = String(today.getDate()).padStart(2, '0');
             targetDate = `${year}${month}${day}`;
+        } else {
+            // 하이픈 제거: '2026-06-22' -> '20260622'
+            targetDate = String(targetDate).replace(/-/g, '');
         }
 
         if (targetDate) {
@@ -333,9 +379,8 @@ async function syncFoodData(isManual = false, userId = null, targetDate = null) 
         return mondayA.localeCompare(mondayB);
     });
 
-    while (data.menus.length > 3) {
-        data.menus.shift();
-    } 
+    // 3주치(저번 주, 이번 주, 다음 주) 데이터만 유지하도록 정제
+    data.menus = cleanOldAndFutureMenus(data.menus);
 
     if (isManual) {
         const isAdmin = OWNER_IDS.includes(userId);
