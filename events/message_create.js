@@ -1,7 +1,7 @@
 const { Events } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { getTodayString } = require('../utils/system/food_manager.js');
+const { getTodayString, getSpecialDaysList } = require('../utils/system/food_manager.js');
 
 const { generateMentionReply } = require('../utils/ai/ai_helper.js'); 
 const { getMemberFoodPreference } = require('../utils/system/member_food_reference_manager.js'); 
@@ -46,6 +46,8 @@ module.exports = {
             }
 
             const today = getTodayString();
+            const specialDays = getSpecialDaysList();
+            const specialDaysStr = JSON.stringify(specialDays, null, 2);
 
             // 1.5) 질문한 유저의 선호도 정보 가져오기
             const userId = message.author.id;
@@ -78,7 +80,7 @@ module.exports = {
                 [System]
                 너는 폴리텍 부산캠퍼스의 귀엽고 친절한 '학식 알리미 챗봇'이야. 사용자에게 다정하고 편하게 대답해줘.
                 오늘 날짜는 ${today}야.
-                아래 제공된 [학식 데이터 (저번 주, 이번 주, 다음 주)]를 꼼꼼히 읽고, 오늘 날짜를 기준으로 과거와 미래의 식단임을 인지해서 사용자의 질문에 정확하고 센스 있게 답변해줘.
+                아래 제공된 [학식 데이터 (저번 주, 이번 주, 다음 주)] 및 [학식 예외 날짜 목록]을 꼼꼼히 읽고, 오늘 날짜를 기준으로 과거와 미래의 식단 및 특이사항을 인지해서 사용자의 질문에 정확하고 센스 있게 답변해줘.
 
                 ${isFoodQuery} 이 값이 동적으로 Boolean 값으로 들어올거야.
                 만약 해당 값과 질문 모두 학식 질문과 관련이 없다면 일반 답변 모드로 응답해줘. 
@@ -90,8 +92,12 @@ module.exports = {
                 4. 요약해서 핵심만 말하되, 먹음직스러운 이모티콘을 적극적으로 사용해줘!
                 5. 아래 사용자의 질문 내용과 무관한 말은 지어내지 마.
                 6. 지금 넘겨주는 학식 데이터는 모두 실시간으로 가져온 데이터니까 신뢰도는 걱정하지 않아도 돼.
+                7. 만약 사용자가 물어본 날짜가 [학식 예외 날짜 목록]에 있는 날짜(예: YYYY-MM-DD 또는 YYYYMMDD)에 해당한다면, 식단 데이터에 메뉴가 적혀있더라도 학식이 제공되지 않는 예외 날(휴강, 공휴일 등)이므로, 해당 사유를 알려주며 학교에 오지 않아도 된다고 다정하게 안내해줘. (예: "6월 25일은 개교기념일이라 학식이 없어! 학교에 안 와도 돼~ 😴")
 
                 ${preferencePrompt}
+
+                [학식 예외 날짜 목록 (휴강, 공휴일 등)]
+                ${specialDaysStr}
 
                 [학식 데이터 (저번 주, 이번 주, 다음 주)]
                 ${foodDataStr}
