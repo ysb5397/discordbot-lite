@@ -82,8 +82,8 @@ module.exports = {
         // 1. 동기화 명령어 처리 (/food refresh)
         if (subcommand === 'refresh') {
             try {
-                const syncDate = getNextWeekDateString();
-                const result = await syncFoodData(true, interaction.user.id, syncDate);
+                const { dateString } = getCurrentMealInfo();
+                const result = await syncFoodData(true, interaction.user.id, dateString);
                 return interaction.followUp(result.message);
             } catch (err) {
                 console.error('❌ [Food Command] 동기화 중 에러:', err);

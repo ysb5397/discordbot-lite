@@ -200,7 +200,6 @@ function getCurrentMealInfo() {
     let targetDate = new Date(kstDate);
     let type = '';
     let typeName = '';
-    let isNextWeek = false;
 
     const isTodayOff = (dayOfWeek === 0 || dayOfWeek === 6 || getSpecialDayReason(todayStr) !== null);
 
@@ -211,7 +210,6 @@ function getCurrentMealInfo() {
         
         type = 'breakfast';
         typeName = '☀️ 다음 수업일 아침';
-        isNextWeek = true;
     } else {
         if (time < 840) {
             type = 'breakfast';
@@ -229,7 +227,6 @@ function getCurrentMealInfo() {
             
             type = 'breakfast';
             typeName = '☀️ 다음 수업일 아침';
-            isNextWeek = true;
         }
     }
 
@@ -238,6 +235,10 @@ function getCurrentMealInfo() {
     const day = String(targetDate.getDate()).padStart(2, '0');
     const dateString = `${year}-${month}-${day}`;
     
+    const todayMonday = getMondayOfDate(todayStr);
+    const targetMonday = getMondayOfDate(dateString);
+    const isNextWeek = (todayMonday !== targetMonday);
+
     return { dateString, type, typeName, isNextWeek };
 }
 
