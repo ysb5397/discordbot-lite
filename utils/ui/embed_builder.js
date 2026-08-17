@@ -1,28 +1,6 @@
-// 파일 위치: /utils/embed_builder.js
+// utils/embed_builder.js
 
 const { EmbedBuilder } = require('discord.js');
-
-// --- 색상 상수 정의 ---
-const COLORS = {
-    SUCCESS: 0x00FA9A,      // 연한 초록 (AI 성공)
-    INFO: 0x0099FF,         // 파랑 (Deep Research)
-    WARN: 0xFFA500,         // 주황 (폴백, 기억 검색)
-    ERROR: 0xE74C3C,         // 빨강 (오류)
-    IMAGE: 0x4A90E2,         // 파랑 계열 (Imagen)
-    VIDEO: 0x5865F2,         // 보라 계열 (Veo)
-    EARTHQUAKE_DEFAULT: 0x808080, // 회색 (지진 기본)
-    HELP: 0x0099FF          // 파랑 (도움말)
-};
-
-// 지진 메시지 코드 매핑
-const EQ_MSG_TYPES = {
-    '지진조기경보': { text: '지진조기경보', emoji: '🚨' },
-    '지진속보': { text: '지진속보', emoji: '📢' },
-    '지진정보': { text: '지진정보', emoji: '📢' },
-    '지진정보(재통보)': { text: '지진정보(재통보)', emoji: '📢' },
-    '국외지진정보': { text: '국외지진정보', emoji: '🌍' },
-    '국외지진조기경보(시범)': { text: '국외지진조기경보', emoji: '🌍' }
-};
 
 /**
  * 기본 Embed 틀을 생성하는 내부 헬퍼 함수
@@ -93,102 +71,6 @@ function createAiResponseEmbed({ title, description, fields, footerPrefix = "Pow
 }
 
 /**
- * 이미지 생성(Imagen) 결과 Embed 생성
- * @param {object} data
- * @param {string} data.prompt - 사용된 프롬프트
- * @param {number} data.imageCount - 생성된 이미지 개수
- * @param {string} data.attachmentUrl - 대표 이미지 Attachment URL (예: 'attachment://gemini-image-1.png')
- * @param {number} data.duration - 명령어 실행 시간 (밀리초)
- * @param {import('discord.js').User} data.user - 요청 사용자 객체
- * @returns {EmbedBuilder}
- */
-function createImageGenEmbed({ prompt, imageCount, attachmentUrl, duration, user }) {
-    const title = `"${prompt.substring(0, 250)}${prompt.length > 250 ? '...' : ''}"`;
-    const description = `${imageCount}개의 이미지가 생성되었습니다.`;
-    const durationString = (duration / 1000).toFixed(1) + 's';
-    const footerText = `Powered by Imagen | ${durationString} 소요 | 요청자: ${user.tag}`;
-
-    return createBaseEmbed({
-        title,
-        description,
-        color: COLORS.IMAGE,
-        imageUrl: attachmentUrl,
-        footerText
-    });
-}
-
-/**
- * 비디오 생성(Veo) 결과 Embed 생성
- * @param {object} data
- * @param {string} data.prompt - 사용된 프롬프트
- * @param {number} data.duration - 명령어 실행 시간 (밀리초)
- * @param {import('discord.js').User} data.user - 요청 사용자 객체
- * @returns {EmbedBuilder}
- */
-function createVideoGenEmbed({ prompt, duration, user }) {
-    const title = `"${prompt.substring(0, 250)}${prompt.length > 250 ? '...' : ''}"`;
-    const description = `영상 생성이 완료되었어! (첨부 파일 확인)`;
-    const durationString = (duration / 1000).toFixed(1) + 's';
-    const footerText = `Powered by Veo | ${durationString} 소요 | 요청자: ${user.tag}`;
-
-    return createBaseEmbed({
-        title,
-        description,
-        color: COLORS.VIDEO,
-        footerText
-    });
-}
-
-/**
- * 지진 정보 알림 Embed 생성 (기존 earthquake.js 로직 기반)
- * @param {object} eqData - 파싱된 지진 정보 객체 (parseEqInfoToObject 결과)
- * @returns {EmbedBuilder}
- */
-function createEarthquakeEmbed(eqData) {
-    const msgTypeInfo = EQ_MSG_TYPES[eqData.msgCode] || {
-        text: eqData.msgCode || '지진정보', // 모르는 코드가 오면 그냥 그 코드를 텍스트로 사용
-        emoji: '📢' // 기본 이모지
-    };
-    const title = `${msgTypeInfo.emoji} 실시간 ${msgTypeInfo.text}`;
-
-    const rawIntensity = eqData.jdLoc || "정보 없음";
-
-    const embedColor = getColorByIntensity(rawIntensity); // 기존 색상 함수 재활용
-
-    // 지진 발생 시각
-    const rawTime = eqData.eqDate || "정보 없음";
-    let formattedTime = "정보 없음";
-    if (rawTime.length === 14) { // YYYYMMDDHHMMSS 형식 확인
-        formattedTime = `${rawTime.substring(0, 4)}년 ${rawTime.substring(4, 6)}월 ${rawTime.substring(6, 8)}일 ${rawTime.substring(8, 10)}시 ${rawTime.substring(10, 12)}분 ${rawTime.substring(12, 14)}초`;
-    }
-
-    // 발표 시간
-    const rawIssueTime = eqData.tmIssue || "정보 없음";
-    let formattedIssueTime = "정보 없음";
-    if (rawIssueTime.length === 14) { // YYYYMMDDHHMMSS 형식 확인
-        formattedIssueTime = `${rawIssueTime.substring(0, 4)}년 ${rawIssueTime.substring(4, 6)}월 ${rawIssueTime.substring(6, 8)}일 ${rawIssueTime.substring(8, 10)}시 ${rawIssueTime.substring(10, 12)}분 ${rawIssueTime.substring(12, 14)}초`;
-    }
-
-    const fields = [
-        { name: '진원지', value: eqData.eqPt || "정보 없음", inline: true },
-        { name: '발생시각', value: formattedTime, inline: true },
-        { name: '규모', value: `M ${eqData.magMl || "정보 없음"}`, inline: true },
-        { name: '최대진도', value: rawIntensity, inline: true },
-        { name: '영향지역', value: eqData.jdLocA, inline: true },
-        { name: ' 깊이', value: `${eqData.eqDt || "?"}km`, inline: true }
-    ];
-
-    // 오해가 발생하지 않도록 footer의 시간을 발표시간인 tmIssue로 변경
-    return createBaseEmbed({
-        title: title,
-        description: eqData.ReFer || "상세 정보 없음",
-        color: embedColor,
-        fields: fields,
-        footerText: formattedIssueTime + ' | 출처: 기상청'
-    });
-}
-
-/**
  * 로그 메시지 Embed 생성
  * @param {object} data
  * @param {string} data.errorMessage - 보여줄 오류 메시지
@@ -213,30 +95,10 @@ function createLogEmbed({ message, commandName, user, type }) {
     });
 }
 
-// --- 내부 헬퍼: 진도별 색상 결정 ---
-function getColorByIntensity(rawIntensityString) {
-    if (!rawIntensityString) return COLORS.EARTHQUAKE_DEFAULT;
-    const upperIntensity = rawIntensityString.toUpperCase();
-    if (upperIntensity.includes('Ⅹ') || upperIntensity.includes('10')) return 0x000000; // 검정
-    if (upperIntensity.includes('Ⅸ') || upperIntensity.includes('IX') || upperIntensity.includes('9')) return 0x4C2600; // 매우 진한 갈색
-    if (upperIntensity.includes('Ⅷ') || upperIntensity.includes('VIII') || upperIntensity.includes('8')) return 0x632523; // 진한 빨강/갈색
-    if (upperIntensity.includes('Ⅶ') || upperIntensity.includes('VII') || upperIntensity.includes('7')) return 0xA32977; // 보라
-    if (upperIntensity.includes('Ⅵ') || upperIntensity.includes('VI') || upperIntensity.includes('6')) return 0xFF0000; // 빨강
-    if (upperIntensity.includes('Ⅴ') || upperIntensity.includes('V') || upperIntensity.includes('5')) return 0xFFC000; // 주황
-    if (upperIntensity.includes('Ⅳ') || upperIntensity.includes('IV') || upperIntensity.includes('4')) return 0xFFFF00; // 노랑
-    if (upperIntensity.includes('Ⅲ') || upperIntensity.includes('III') || upperIntensity.includes('3')) return 0x92D050; // 연두
-    if (upperIntensity.includes('Ⅱ') || upperIntensity.includes('II') || upperIntensity.includes('2')) return 0xADE8FF; // 하늘
-    if (upperIntensity.includes('Ⅰ') || upperIntensity.includes('I') || upperIntensity.includes('1')) return 0xFFFFFF; // 흰색
-    return COLORS.EARTHQUAKE_DEFAULT; // 회색
-}
-
 
 // 필요한 함수들을 export
 module.exports = {
     createBaseEmbed,
     createAiResponseEmbed,
-    createImageGenEmbed,
-    createVideoGenEmbed,
-    createEarthquakeEmbed,
     createLogEmbed
 };

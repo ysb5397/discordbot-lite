@@ -1,7 +1,7 @@
 // utils/time.js
 
 /**
- * 'YYYY-MM-DD HH:MM' 형식의 KST 문자열을 UTC Date 객체로 변환합니다.
+ * 'YYYY-MM-DD HH:MM' 형식의 KST 문자열을 UTC Date 객체로 변환
  * @param {string} dateTimeString - KST 시간 문자열
  * @returns {Date} - UTC 기준의 Date 객체
  */
@@ -15,7 +15,7 @@ function parseKSTDateTime(dateTimeString) {
     const hourKST = parseInt(dateParts[4]);
     const minute = parseInt(dateParts[5]);
 
-    // KST(UTC+9)이므로 UTC로 변환하려면 9시간을 빼줍니다.
+    // KST(UTC+9)
     const utcTimestamp = Date.UTC(year, month, day, hourKST - 9, minute);
     const dateObject = new Date(utcTimestamp);
     

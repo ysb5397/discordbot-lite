@@ -15,7 +15,6 @@ const LogLevel = {
 async function logToDiscord(client, level, message, interaction = null, error = null, origin = null) {
     const levelInfo = LogLevel[level] || LogLevel.INFO;
 
-    // --- 1. 콘솔에도 로그 남기기 ---
     const consoleTimestamp = new Date().toLocaleString('ko-KR');
     let consoleMessage = `[${consoleTimestamp}] [${level}] ${message}`;
     if (interaction) {
@@ -37,9 +36,6 @@ async function logToDiscord(client, level, message, interaction = null, error = 
         default:
             console.log(consoleMessage);
     }
-
-    // [Lite 버전 수정] 기존 DB에 에러를 백업하던 로직(Interaction.create)을 완전히 삭제했어.
-    // Lite 버전은 DB가 없으므로 파일이나 디스코드 로그 채널에만 의존해야 해.
 
     if (!LOG_CHANNEL_ID) {
         console.warn('[Logger] DISCORD_LOG_CHANNEL_ID가 설정되지 않아 디스코드 로깅을 건너뜁니다.');

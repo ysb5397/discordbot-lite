@@ -1,5 +1,4 @@
 const { Events, ChannelType, ActivityType } = require('discord.js');
-const { startEarthquakeMonitor } = require('../utils/system/earthquake');
 const { joinVoiceChannel } = require('@discordjs/voice');
 const config = require('../config/manage_environments');
 
@@ -28,9 +27,6 @@ module.exports = {
                 console.error('봇 상태 메시지 설정 중 오류 발생:', error);
             }
         }, 5000);
-
-        // 지진 정보 모니터링 시작 (내부 스케줄러 사용)
-        startEarthquakeMonitor(client);
 
         const targetChannel = await client.channels.fetch(TARGET_CHANNEL_ID).catch(() => null);
         if (targetChannel && targetChannel.type === ChannelType.GuildVoice) {

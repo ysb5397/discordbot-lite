@@ -23,33 +23,25 @@ const config = {
 
     // 2. 채널 ID 모음
     channels: {
-        earthquakeNotice: required('EARTHQUAKE_NOTICE_CHANNEL_ID'),
         ignoreAiChat: required('IGNORE_AI_CHAT_CHANNEL_ID')
     },
 
-    // 3. AI 설정 (무료 토큰 및 Flash 모델 최적화)
+    // 3. AI 설정 (Ollama 로컬 AI로 교체)
     ai: {
-        geminiKey: required('GEMINI_API_KEY'),
-        // 페르소나 설정 (네가 원하는 반말 모드!)
-        persona: process.env.AI_PERSONA || `
-            너는 사용자의 친한 친구이자 유능한 AI 비서야.
-            말투는 항상 귀엽고 친근한 반말(해체)을 사용해.
-            사용자를 부를 때는 '너' 또는 '네가'라고 지칭해.
-            이모지를 적절히 사용해서 감정을 표현해줘.
-            모르는 것이 있으면 솔직하게 모른다고 하고 같이 찾아보자고 제안해.
-        `.trim()
+        ollamaUrl: required('OLLAMA_URL', 'http://127.0.0.1:11434/api/chat'), 
+        
+        // 모델 이름
+        modelName: required('AI_MODEL_NAME', 'my_luna'), 
+        
+        // 루나의 정체성을 완벽하게 박아버리는 시스템 프롬프트로 기본값 변경
+        persona: process.env.AI_PERSONA || `너는 똑똑하고 센스 있는 사용자 전용 AI 비서 루나(Luna)야. 기계적인 번역투나 딱딱한 말투는 절대 피하고, 자연스럽고 친절한 한국어 반말로 대답해. 사용자가 묻는 말에 핵심만 명쾌하게 답변하며, 적절한 이모지를 사용해서 대화해줘.`
     },
 
-    // 4. 시스템 설정 (DB 제거됨 - 메모리 및 환경 변수 활용)
-    system: { // 이 부분에 'system' 또는 'server'라는 키가 빠져있었어!
+    // 4. 시스템 설정
+    system: {
         port: process.env.PORT || 5500,
         jwtSecret: required('JWT_SECRET', 'default_secret_for_lite'), // Lite 버전이므로 기본값 허용 검토
         appUrl: process.env.APP_URL,
-    },
-
-    // 5. 지진 정보 API (기상청 공공데이터 등)
-    etc: {
-        earthquakeKey: required('EQK_AUTH_KEY'),
     }
 };
 

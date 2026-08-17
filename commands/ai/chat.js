@@ -1,11 +1,9 @@
+// commands/ai/chat.js
 const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const { getChatResponseStreamOrFallback } = require('../../utils/ai/ai_helper.js');
 const { logToDiscord } = require('../../utils/system/catch_log.js');
 const { createAiResponseEmbed } = require('../../utils/ui/embed_builder.js');
 
-/**
- * getChatResponseStreamOrFallback 제너레이터를 사용하여 응답 처리
- */
 async function handleRegularConversation(interaction, startTime, selectedModel, tokenLimit) {
     const client = interaction.client;
     const userQuestion = interaction.options.getString('question');
@@ -13,16 +11,16 @@ async function handleRegularConversation(interaction, startTime, selectedModel, 
     const attachment = interaction.options.getAttachment('file');
 
     let promptData = { question: userQuestion };
-    let footerInfo = ['무료 Gemini'];
+    let footerInfo = ['Local AI (Luna)'];
 
-    // --- 4. 스트리밍 응답 처리 ---
     let fullResponseText = "";
     let finalMessage = null;
     let isFallback = false;
     let finalError = null;
 
+    // 디스코드 API 제한 방어
     let lastUpdateTime = 0;
-    const updateInterval = 1800;
+    const updateInterval = 1800; 
     let currentEmbed = null;
 
     const debouncedUpdate = async (isFinal = false) => {
@@ -50,7 +48,7 @@ async function handleRegularConversation(interaction, startTime, selectedModel, 
 
         try {
             await interaction.editReply({
-                content: `<@${sessionId}>${isStreaming ? ' 생각 중...' : ''}`,
+                content: `<@${sessionId}>${isStreaming ? ' 타이핑 중... ⌨️' : ''}`,
                 embeds: [currentEmbed]
             });
         } catch (editError) {
@@ -84,7 +82,6 @@ async function handleRegularConversation(interaction, startTime, selectedModel, 
             throw finalError;
         } else {
             await debouncedUpdate(true);
-            // DB 저장 제거됨 - 메모리 전용 (휘발성)
         }
 
     } catch (error) {
@@ -93,11 +90,10 @@ async function handleRegularConversation(interaction, startTime, selectedModel, 
     }
 }
 
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('chat')
-        .setDescription('AI와 대화하거나, 저장된 기억을 검색합니다.')
+        .setDescription('똑똑한 전용 비서 루나(Luna)와 대화합니다.')
         .setContexts([
             InteractionContextType.Guild,
             InteractionContextType.BotDM,
@@ -105,32 +101,32 @@ module.exports = {
         ])
         .addStringOption(option =>
             option.setName('model')
-                .setDescription('사용할 AI 모델을 선택합니다. (모두 무료 토큰)')
+                .setDescription('사용할 AI 모델을 선택합니다.')
                 .setRequired(true)
                 .addChoices(
-                    { name: 'Gemini 2.5 Flash (권장)', value: 'gemini-2.5-flash' },
-                    { name: 'Gemini 3.1 Flash', value: 'gemini-3-flash-preview' },
+                    { name: '루나 (Local AI)', value: 'my_luna' }
                 ))
         .addStringOption(option =>
             option.setName('question')
-                .setDescription('AI에게 할 질문 또는 검색할 내용')
+                .setDescription('루나에게 할 질문')
                 .setRequired(true))
         .addIntegerOption(option =>
             option.setName('token_limit')
-                .setDescription('AI 응답의 최대 토큰 수를 설정합니다. (기본: 2048, 최대: 10000)')
+                .setDescription('AI 응답의 최대 길이를 설정합니다. (기본: 2048)')
                 .setRequired(false)
                 .setMinValue(100)
                 .setMaxValue(10000))
         .addAttachmentOption(option =>
             option.setName('file')
-                .setDescription('AI에게 보여줄 파일을 첨부하세요 (이미지, 코드 등).')
+                .setDescription('파일을 첨부하세요 (로컬 AI는 현재 파일 이름만 참고합니다).')
                 .setRequired(false)),
 
     async execute(interaction) {
         const startTime = Date.now();
         await interaction.deferReply();
 
-        const selectedModel = interaction.options.getString('model');
+        // 3. 기본값 my_luna
+        const selectedModel = interaction.options.getString('model') || 'my_luna';
         const tokenLimit = interaction.options.getInteger('token_limit') || 2048;
 
         try {
