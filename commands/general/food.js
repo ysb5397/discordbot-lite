@@ -119,17 +119,13 @@ module.exports = {
                 menuString = getMenu(dateString, type);
             }
 
-            // 파스텔 그라데이션 이미지 굽기
-            const imageBuffer = await generateFoodImage(dateString, typeName, menuString);
-            const file = new AttachmentBuilder(imageBuffer, { name: 'food_menu.png' });
-
             const embed = new EmbedBuilder()
                 .setColor(0xB3CFFB) 
                 .setTitle(`🍽️ 학식 안내 (${typeName})`)
-                .setImage('attachment://food_menu.png')
+                .setDescription(${menuString})
                 .setFooter({ text: '데이터 동기화가 필요하면 /food refresh를 사용하세요.' });
 
-            await interaction.followUp({ embeds: [embed], files: [file] });
+            await interaction.followUp({ embeds: [embed] });
         }
 
         // 3. 개인 식단 선호도 처리 (/food reference)
