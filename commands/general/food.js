@@ -122,7 +122,7 @@ module.exports = {
             const embed = new EmbedBuilder()
                 .setColor(0xB3CFFB) 
                 .setTitle(`🍽️ 학식 안내 (${typeName})`)
-                .setDescription(${menuString})
+                .setDescription(`${menuString}`)
                 .setFooter({ text: '데이터 동기화가 필요하면 /food refresh를 사용하세요.' });
 
             await interaction.followUp({ embeds: [embed] });
